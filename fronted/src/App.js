@@ -1,64 +1,85 @@
-// import logo from './logo.svg';
-// import './App.css';
+// src/App.js
+import React, { useEffect, useState } from 'react';
+// import { io } from 'socket.io-client';
+import SensorChart from './components/SensorChart';  // 导入新的组件
+import 'chartjs-adapter-date-fns';
+import axios from 'axios';
 
-// function App() {
-//   return (
-//     <div className="App">
-//       <header className="App-header">
-//         <img src={logo} className="App-logo" alt="logo" />
-//         <p>
-//           Edit <code>src/App.js</code> and save to reload.
-//         </p>
-//         <a
-//           className="App-link"
-//           href="https://reactjs.org"
-//           target="_blank"
-//           rel="noopener noreferrer"
-//         >
-//           Learn React
-//         </a>
-//       </header>
-//     </div>
-//   );
-// }
-
-
-import React, { useState, useEffect } from 'react';
-import socketIOClient from 'socket.io-client';
+// const socket = io('http://127.0.0.1:5000'); // 连接到后端 WebSocket 服务器
 
 const App = () => {
-  const [temperature, setTemperature] = useState(null);
+  const [chartData, setChartData] = useState({
+    labels: [],
+    datasets: [
+      {
+        label: '温度 (°C)',
+        data: [],
+        borderColor: 'rgba(255,99,132,1)',
+        backgroundColor: 'rgba(255,99,132,0.2)',
+        fill: false,
+        yAxisID: 'y1',
+      },
+      {
+        label: '湿度 (%)',
+        data: [],
+        borderColor: 'rgba(54,162,235,1)',
+        backgroundColor: 'rgba(54,162,235,0.2)',
 
-  useEffect(() => {
-    const socket = socketIOClient("http://localhost:5000", {
-      transports: ["websocket"],
-      upgrade: false
-    });
-    socket.on("connect", () => {
-      console.log("Connected to server");
-    });
-    socket.on("connect_error", (err) => {
-      console.error("Connection error:", err);
-    });
-    
-    socket.on("temperature_update", (data) => {	
-      console.log("Received temperature data: ", data);
-      setTemperature(data.temperature);
-    });
-    // socket.on("disconnect", () => {
-    //   console.log("Disconnected from server");
-    // });
-    
-    return () => {
-      socket.off("temperature_update");
-      socket.disconnect();
-    };
-    }, []);
+        fill: false,
+        yAxisID: 'y2',
+      },
+    ],
+  });
+
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/data');
+      const data = response.data;
+      console.log(data);
+      const labels = data.map(item => new Date(item.timestamp));
+      console.log(labels);
+      const temperatureData = data.map(item => item.temperature);
+      console.log(temperatureData);
+      const humidityData = data.map(item => item.humidity);
+
+      setChartData({
+        labels: labels,
+        datasets: [
+          {
+            label: '温度 (°C)',
+            data: temperatureData,
+            borderColor: 'rgba(255,99,132,1)',
+            backgroundColor: 'rgba(255,99,132,0.2)',
+            fill: false,
+            yAxisID: 'y1',
+          },
+          {
+            label: '湿度 (%)',
+            data: humidityData,
+            borderColor: 'rgba(54,162,235,1)',
+            backgroundColor: 'rgba(54,162,235,0.2)',
+            fill: false,
+            yAxisID: 'y2',
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  fetchData();
+  const intervalId = setInterval(fetchData, 5000); // 每5秒更新一次数据
+  return () => {
+    clearInterval(intervalId);
+  };
+}, []);
 
   return (
-	<div>
-	  <h1>Temperature: {temperature}</h1>
-	</div>
+    <div className="App">
+      <SensorChart chartData={chartData} /> {/* 使用新的组件 */}
+    </div>
   );
 };
 
