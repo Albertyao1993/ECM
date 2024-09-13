@@ -7,8 +7,8 @@ import platform
 import threading
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
-socketio = SocketIO(app, cors_allowed_origins="http://localhost:3000")
+CORS(app, resources={r"/*": {"origins": "*"}})
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 def detect_os():
     os_type = platform.system()
