@@ -6,10 +6,14 @@ from flask_socketio import SocketIO
 import platform
 import serial
 
+from Database.sensor_data import SensorData
+from queue import Queue
+
 class DTH111:
-    def __init__(self, socketio: SocketIO):
+    def __init__(self, socketio: SocketIO, data_queue: Queue):
         self.socketio = socketio
         self.data = []
+        self.data_queue = data_queue
 
     def detect_os(self):
         os_type = platform.system()
@@ -38,23 +42,7 @@ class DTH111:
             return None
 
     def read_sensor_data(self):
-        # while True:
-            # new_data_point = {
-            #     'timestamp': datetime.now().isoformat(),
-            #     'temperature': 25.0,  # 模拟温度数据 25.0 度
-            #     'humidity': 50.0       # 模拟湿度数据 50%
-            # }
-            # self.data.append(new_data_point)
-            
-            # # 只保留最新的20个数据点
-            # if len(self.data) > 20:
-            #     self.data.pop(0)
-            
-            # # 向所有连接的客户端发送数据
-            # self.socketio.emit('sensor_data', new_data_point)
-            # print(f"Sent data: {new_data_point}")
-            
-            # time.sleep(2)  # 每2秒生成一次数据
+       
         ser = self.init_serial()
         try:
             while True:
@@ -63,12 +51,17 @@ class DTH111:
                     print(f"Received data: {line}")
                     temperature, humidity = line.split(',')
                     # temperature = line
-                    new_data_point = {
-                        'timestamp': datetime.now().isoformat(),
-                        'temperature': float(temperature),
-                        'humidity': float(humidity)
-                        # 'humidity': 50.0
-                    }
+                    # new_data_point = {
+                    #     'timestamp': datetime.now().isoformat(),
+                    #     'temperature': float(temperature),
+                    #     'humidity': float(humidity)
+                    #     # 'humidity': 50.0
+                    # }
+                    new_data_point = SensorData(
+                        timestamp=datetime.now().isoformat(),
+                        temperature=float(temperature),
+                        humidity=float(humidity)
+                    )
                     self.data.append(new_data_point)
                     
                     # 只保留最新的20个数据点
@@ -76,8 +69,10 @@ class DTH111:
                         self.data.pop(0)
                     
                     # 向所有连接的客户端发送数据
-                    self.socketio.emit('sensor_data', new_data_point)
-                    print(f"Sent data: {new_data_point}")
+                    self.socketio.emit('sensor_data', new_data_point.to_dict())
+                    print(f"Sent data: {new_data_point.to_dict()}")
+
+                    self.data_queue.put(new_data_point)
         except KeyboardInterrupt:
             print("Program terminated")
         finally:
