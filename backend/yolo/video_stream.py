@@ -4,9 +4,8 @@ import base64
 import cv2
 from flask_socketio import SocketIO
 from yolo.video_detection import VideoDetection
-from queue import Queue
 
-def send_video_frames(socketio: SocketIO, video_detection: VideoDetection, data_queue: Queue):
+def send_video_frames(socketio: SocketIO, video_detection: VideoDetection):
     cap = cv2.VideoCapture(0)  # 0 is the default camera
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
@@ -28,14 +27,8 @@ def send_video_frames(socketio: SocketIO, video_detection: VideoDetection, data_
 
         # Send the frame and person count via WebSocket
         socketio.emit('video_frame', {'frame': frame, 'person_count': person_count})
-        if not data_queue.empty():
-                    latest_data_point = data_queue.get()
-                    latest_data_point.person_count = person_count
-                    data_queue.put(latest_data_point)
-
 
         time.sleep(0.1)
-
 
     cap.release()
     cv2.destroyAllWindows()
