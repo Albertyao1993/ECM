@@ -1,22 +1,28 @@
 # app.py
 import os
+import signal
+import sys
 import time
-from threading import Thread
+import datetime
+from threading import Event
 from queue import Queue
 from flask import Flask, jsonify, request, Response
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
+from concurrent.futures import ThreadPoolExecutor
 
 from Database.db_operation import Database
 from server.dth111 import DTH111
 from yolo.video_detection import VideoDetection
-from yolo.video_stream import send_video_frames  # 导入 send_video_frames 函数
+from yolo.video_stream import send_video_frames
+from Database.sensor_data import SensorData
 
 app = Flask(__name__)
 CORS(app, origins="*")
 socketio = SocketIO(app, cors_allowed_origins="*")  # Enable CORS for frontend access
 
 data_queue = Queue()
+stop_event = Event()
 
 # Initialize the database
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
@@ -27,10 +33,14 @@ video_detection = VideoDetection(model_path=model_path)  # Initialize the YOLOv8
 
 def websocket_thread():
     # Start reading sensor data
-    dth111.read_sensor_data()
+    print("Starting sensor data thread")
+    while not stop_event.is_set():
+        dth111.read_sensor_data()
+        time.sleep(0.5)
 
 def database_thread():
-    while True:
+    print("Starting database thread")
+    while not stop_event.is_set():
         try:
             # Insert the current data into the database every minute
             time.sleep(60)
@@ -41,15 +51,16 @@ def database_thread():
         except Exception as e:
             print(f"Error in database thread: {e}")
 
-# Start the WebSocket thread
-ws_thread = Thread(target=websocket_thread)
-ws_thread.daemon = True
-ws_thread.start()
+def video_frames_thread():
+    print("Starting video frames thread")
+    while not stop_event.is_set():
+        try:
+            print("Sending video frames")
+            send_video_frames(socketio, video_detection, data_queue, stop_event)
+        except Exception as e:
+            print(f"Error in video frames thread: {e}")
+            break
 
-# Start the database thread
-db_thread = Thread(target=database_thread)
-db_thread.daemon = True
-db_thread.start()
 
 # Start the YOLOv8 detection thread
 video_detection.start_detection()
@@ -67,13 +78,40 @@ def handle_connect():
 def handle_disconnect():
     print('Client disconnected')
 
-# Start the video frame sending thread
-video_thread = Thread(target=send_video_frames, args=(socketio, video_detection))
-video_thread.daemon = True
-video_thread.start()
+# WebRTC signaling
+@socketio.on('offer')
+def handle_offer(data):
+    socketio.emit('offer', data, broadcast=True)
+
+@socketio.on('answer')
+def handle_answer(data):
+    socketio.emit('answer', data, broadcast=True)
+
+@socketio.on('ice-candidate')
+def handle_ice_candidate(data):
+    socketio.emit('ice-candidate', data, broadcast=True)
+
+# Use ThreadPoolExecutor to manage threads
+executor = ThreadPoolExecutor(max_workers=4)
+executor.submit(websocket_thread)
+executor.submit(database_thread)
+executor.submit(video_frames_thread)
+
+def signal_handler(sig, frame):
+    print('Terminating...')
+    stop_event.set()
+    video_detection.stop_detection()
+    executor.shutdown(wait=True)
+    sys.exit(0)
+
+# 捕获终止信号
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 
 if __name__ == '__main__':
     try:
         socketio.run(app, debug=True, host='127.0.0.1', port=5000, use_reloader=False, log_output=True)
     finally:
         video_detection.stop_detection()
+        executor.shutdown(wait=True)

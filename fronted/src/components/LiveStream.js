@@ -1,48 +1,172 @@
+// import React, { useEffect, useRef, useState } from 'react';
+// import io from 'socket.io-client';
+
+// const LiveStream = () => {
+//   const videoRef = useRef(null);
+//   const [personCount, setPersonCount] = useState(0);
+//   const socketRef = useRef(null);
+//   const peerConnectionRef = useRef(null);
+
+//   useEffect(() => {
+//     // 连接到 WebSocket 服务器
+//     socketRef.current = io('http://127.0.0.1:5000');
+
+//     // 创建 RTCPeerConnection
+//     peerConnectionRef.current = new RTCPeerConnection({
+//       iceServers: [
+//         { urls: 'stun:stun.l.google.com:19302' },
+//       ],
+//     });
+
+//     // 处理 ICE 候选
+//     peerConnectionRef.current.onicecandidate = (event) => {
+//       if (event.candidate) {
+//         socketRef.current.emit('ice-candidate', event.candidate);
+//       }
+//     };
+
+//     // 处理远程流
+//     peerConnectionRef.current.ontrack = (event) => {
+//       if (videoRef.current) {
+//         videoRef.current.srcObject = event.streams[0];
+//       }
+//     };
+
+//     // 监听 WebSocket 事件 'offer'
+//     socketRef.current.on('offer', async (data) => {
+//       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data));
+//       const answer = await peerConnectionRef.current.createAnswer();
+//       await peerConnectionRef.current.setLocalDescription(answer);
+//       socketRef.current.emit('answer', answer);
+//     });
+
+//     // 监听 WebSocket 事件 'answer'
+//     socketRef.current.on('answer', async (data) => {
+//       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data));
+//     });
+
+//     // 监听 WebSocket 事件 'ice-candidate'
+//     socketRef.current.on('ice-candidate', async (data) => {
+//       try {
+//         await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data));
+//       } catch (e) {
+//         console.error('Error adding received ice candidate', e);
+//       }
+//     });
+
+//     // 组件卸载时清理
+//     return () => {
+//       socketRef.current.disconnect(); // 断开 WebSocket 连接
+//       peerConnectionRef.current.close(); // 关闭 RTCPeerConnection
+//     };
+//   }, []);
+
+//   return (
+//     <div>
+//       <h1>Live Stream</h1>
+//       <video ref={videoRef} width="640" height="480" autoPlay playsInline /> {/* 使用 <video> 标签来显示视频流 */}
+//       <p>Person Count: {personCount}</p>
+//     </div>
+//   );
+// };
+
+// export default LiveStream;
+
+
+
 import React, { useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 
 const LiveStream = () => {
-  const imgRef = useRef(null); // 用于引用 <img> 标签
+  const videoRef = useRef(null);
   const [personCount, setPersonCount] = useState(0);
-  const socketRef = useRef(null); // 用于引用 WebSocket 实例
-  const previousUrlRef = useRef(null); // 用 useRef 来存储上一个 Blob URL
+  const socketRef = useRef(null);
+  const peerConnectionRef = useRef(null);
 
   useEffect(() => {
     // 连接到 WebSocket 服务器
     socketRef.current = io('http://127.0.0.1:5000');
+    console.log('Connecting to WebSocket server...');
 
-    // 监听 WebSocket 事件 'video_frame'
-    socketRef.current.on('video_frame', (data) => {
-      const { frame, person_count } = data;
-      setPersonCount(person_count);
+    socketRef.current.on('connect', () => {
+      console.log('Connected to WebSocket server');
+    });
 
-      if (imgRef.current) {
-        // 创建 Blob 对象来存储图像数据
-        const blob = new Blob([Uint8Array.from(atob(frame), c => c.charCodeAt(0))], { type: 'image/jpeg' });
-        const url = URL.createObjectURL(blob); // 创建新的 Blob URL
-        imgRef.current.src = url; // 将 Blob URL 设置为 <img> 标签的 src
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from WebSocket server');
+    });
 
-        // 释放之前的 Blob URL 以避免内存泄漏
-        if (previousUrlRef.current) {
-          URL.revokeObjectURL(previousUrlRef.current);
-        }
-        previousUrlRef.current = url; // 更新 previousUrlRef.current
+    // 创建 RTCPeerConnection
+    peerConnectionRef.current = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+      ],
+    });
+
+    console.log('RTCPeerConnection created');
+
+    // 处理 ICE 候选
+    peerConnectionRef.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Sending ICE candidate');
+        socketRef.current.emit('ice-candidate', event.candidate);
       }
+    };
+
+    // 处理远程流
+    peerConnectionRef.current.ontrack = (event) => {
+      console.log('Receiving remote stream');
+      if (videoRef.current) {
+        videoRef.current.srcObject = event.streams[0];
+      }
+    };
+
+    // 监听 WebSocket 事件 'offer'
+    socketRef.current.on('offer', async (data) => {
+      console.log('Received offer');
+      await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data));
+      const answer = await peerConnectionRef.current.createAnswer();
+      await peerConnectionRef.current.setLocalDescription(answer);
+      socketRef.current.emit('answer', answer);
+    });
+
+    // 监听 WebSocket 事件 'answer'
+    socketRef.current.on('answer', async (data) => {
+      console.log('Received answer');
+      await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(data));
+    });
+
+    // 监听 WebSocket 事件 'ice-candidate'
+    socketRef.current.on('ice-candidate', async (data) => {
+      console.log('Received ICE candidate');
+      try {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(data));
+      } catch (e) {
+        console.error('Error adding received ice candidate', e);
+      }
+    });
+
+    // 监听视频帧数据
+    socketRef.current.on('video_frame', (data) => {
+      console.log('Received video frame');
+      if (videoRef.current) {
+        videoRef.current.src = `data:image/jpeg;base64,${data.frame}`;
+      }
+      setPersonCount(data.person_count);
     });
 
     // 组件卸载时清理
     return () => {
-      socketRef.current.disconnect(); // 断开 WebSocket 连接
-      if (previousUrlRef.current) {
-        URL.revokeObjectURL(previousUrlRef.current); // 释放最后一个 Blob URL
-      }
+      console.log('Cleaning up...');
+      socketRef.current.disconnect();
+      peerConnectionRef.current.close();
     };
   }, []);
 
   return (
     <div>
       <h1>Live Stream</h1>
-      <img ref={imgRef} width="640" height="480" alt="Live Stream" /> {/* 使用 <img> 标签来显示视频帧 */}
+      <img ref={videoRef} width="640" height="480" autoPlay playsInline />
       <p>Person Count: {personCount}</p>
     </div>
   );
