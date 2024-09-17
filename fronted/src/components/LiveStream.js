@@ -166,7 +166,7 @@ const LiveStream = () => {
   return (
     <div>
       <h1>Live Stream</h1>
-      <video ref={videoRef} width="640" height="480" autoPlay playsInline />
+      <img ref={videoRef} width="640" height="480" autoPlay playsInline />
       <p>Person Count: {personCount}</p>
     </div>
   );

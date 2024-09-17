@@ -8,7 +8,8 @@ from queue import Queue
 from threading import Event
 
 def send_video_frames(socketio: SocketIO, video_detection: VideoDetection, data_queue: Queue, stop_event: Event):
-    cap = cv2.VideoCapture(0)  # 0 is the default camera
+    # cap = cv2.VideoCapture(0)  # 0 is the default camera
+    cap = cv2.VideoCapture('/dev/video0')
     if not cap.isOpened():
         print("Error: Could not open video stream.")
         return
