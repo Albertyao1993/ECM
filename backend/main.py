@@ -1,16 +1,19 @@
 # app.py
 import os
 import time
+import datetime
 from threading import Thread
 from queue import Queue
 from flask import Flask, jsonify, request, Response
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
+from concurrent.futures import ThreadPoolExecutor
 
 from Database.db_operation import Database
 from server.dth111 import DTH111
 from yolo.video_detection import VideoDetection
-from yolo.video_stream import send_video_frames  # 导入 send_video_frames 函数
+from yolo.video_stream import send_video_frames
+from Database.sensor_data import SensorData
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -41,16 +44,6 @@ def database_thread():
         except Exception as e:
             print(f"Error in database thread: {e}")
 
-# Start the WebSocket thread
-ws_thread = Thread(target=websocket_thread)
-ws_thread.daemon = True
-ws_thread.start()
-
-# Start the database thread
-db_thread = Thread(target=database_thread)
-db_thread.daemon = True
-db_thread.start()
-
 # Start the YOLOv8 detection thread
 video_detection.start_detection()
 
@@ -67,13 +60,15 @@ def handle_connect():
 def handle_disconnect():
     print('Client disconnected')
 
-# Start the video frame sending thread
-video_thread = Thread(target=send_video_frames, args=(socketio, video_detection))
-video_thread.daemon = True
-video_thread.start()
+# Use ThreadPoolExecutor to manage threads
+executor = ThreadPoolExecutor(max_workers=3)
+executor.submit(websocket_thread)
+executor.submit(database_thread)
+executor.submit(send_video_frames, socketio, video_detection, data_queue)
 
 if __name__ == '__main__':
     try:
         socketio.run(app, debug=True, host='127.0.0.1', port=5000, use_reloader=False, log_output=True)
     finally:
         video_detection.stop_detection()
+        executor.shutdown(wait=True)
