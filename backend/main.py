@@ -1,8 +1,10 @@
 # app.py
 import os
+import signal
+import sys
 import time
 import datetime
-from threading import Thread
+from threading import Event
 from queue import Queue
 from flask import Flask, jsonify, request, Response
 from flask_socketio import SocketIO, emit
@@ -20,6 +22,7 @@ CORS(app, origins="*")
 socketio = SocketIO(app, cors_allowed_origins="*")  # Enable CORS for frontend access
 
 data_queue = Queue()
+stop_event = Event()
 
 # Initialize the database
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
@@ -30,10 +33,14 @@ video_detection = VideoDetection(model_path=model_path)  # Initialize the YOLOv8
 
 def websocket_thread():
     # Start reading sensor data
-    dth111.read_sensor_data()
+    print("Starting sensor data thread")
+    while not stop_event.is_set():
+        dth111.read_sensor_data()
+        time.sleep(0.5)
 
 def database_thread():
-    while True:
+    print("Starting database thread")
+    while not stop_event.is_set():
         try:
             # Insert the current data into the database every minute
             time.sleep(60)
@@ -43,6 +50,17 @@ def database_thread():
                 print(f"Stored data: {latest_data_point.to_dict()}")
         except Exception as e:
             print(f"Error in database thread: {e}")
+
+def video_frames_thread():
+    print("Starting video frames thread")
+    while not stop_event.is_set():
+        try:
+            print("Sending video frames")
+            send_video_frames(socketio, video_detection, data_queue, stop_event)
+        except Exception as e:
+            print(f"Error in video frames thread: {e}")
+            break
+
 
 # Start the YOLOv8 detection thread
 video_detection.start_detection()
@@ -74,10 +92,22 @@ def handle_ice_candidate(data):
     socketio.emit('ice-candidate', data, broadcast=True)
 
 # Use ThreadPoolExecutor to manage threads
-executor = ThreadPoolExecutor(max_workers=3)
+executor = ThreadPoolExecutor(max_workers=4)
 executor.submit(websocket_thread)
 executor.submit(database_thread)
-executor.submit(send_video_frames, socketio, video_detection, data_queue)
+executor.submit(video_frames_thread)
+
+def signal_handler(sig, frame):
+    print('Terminating...')
+    stop_event.set()
+    video_detection.stop_detection()
+    executor.shutdown(wait=True)
+    sys.exit(0)
+
+# 捕获终止信号
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 
 if __name__ == '__main__':
     try:
