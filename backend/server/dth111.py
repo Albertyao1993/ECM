@@ -5,15 +5,17 @@ from datetime import datetime
 from flask_socketio import SocketIO
 import platform
 import serial
+from threading import Lock
 
 from Database.sensor_data import SensorData
 from queue import Queue
 
 class DTH111:
-    def __init__(self, socketio: SocketIO, data_queue: Queue):
+    def __init__(self, socketio: SocketIO, data_queue: Queue, lock: Lock):
         self.socketio = socketio
         self.data = []
         self.data_queue = data_queue
+        self.lock = lock
 
     def detect_os(self):
         os_type = platform.system()
@@ -42,7 +44,6 @@ class DTH111:
             return None
 
     def read_sensor_data(self):
-       
         ser = self.init_serial()
         try:
             while True:
@@ -50,15 +51,12 @@ class DTH111:
                 if line:
                     print(f"Received data: {line}")
                     temperature, humidity = line.split(',')
-                    # temperature = line
-                    # new_data_point = {
-                    #     'timestamp': datetime.now().isoformat(),
-                    #     'temperature': float(temperature),
-                    #     'humidity': float(humidity)
-                    #     # 'humidity': 50.0
-                    # }
+
+                    # 格式化时间戳
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
                     new_data_point = SensorData(
-                        timestamp=datetime.now().isoformat(),
+                        timestamp=timestamp,
                         temperature=float(temperature),
                         humidity=float(humidity)
                     )
@@ -68,18 +66,20 @@ class DTH111:
                     if len(self.data) > 20:
                         self.data.pop(0)
                     
-                    # 向所有连接的客户端发送数据
-                    self.socketio.emit('sensor_data', new_data_point.to_dict())
-                    print(f"Sent data: {new_data_point.to_dict()}")
-
-                    self.data_queue.put(new_data_point)
-        except KeyboardInterrupt:
-            print("Program terminated")
+                    # 将数据发送到队列中
+                    with self.lock:
+                        self.data_queue.put(new_data_point)
+                    
+                    # 通过 WebSocket 发送数据
+                    self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
+                
+                # 每2秒读取一次数据
+                time.sleep(2)
+        except Exception as e:
+            print(f"Error reading sensor data: {e}")
         finally:
-            if 'ser' in locals() and ser.is_open:
+            if ser:
                 ser.close()
-                print("Serial port closed")
-            
 
     def get_data(self):
         return self.data
