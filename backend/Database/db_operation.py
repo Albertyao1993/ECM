@@ -41,4 +41,14 @@ class Database:
 
     def read_all(self):
         """读取所有记录"""
-        return list(self.collection.find())
+        # return list(self.collection.find())
+        return list(self.collection.find({}, {'_id': False}))
+    
+    def read_by_time_range(self, start_time, end_time):
+        """根据时间范围读取记录"""
+        query = {"timestamp": {"$gte": start_time, "$lte": end_time}}
+        records = list(self.collection.find(query))
+        for record in records:
+            if '_id' in record:
+                record['_id'] = str(record['_id'])
+        return records
