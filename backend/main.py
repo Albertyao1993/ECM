@@ -2,10 +2,11 @@ import os
 import signal
 import sys
 import time
+import datetime
 from threading import Event
 from queue import Queue
-from flask import Flask, jsonify
-from flask_socketio import SocketIO
+from flask import Flask, jsonify, request
+from flask_socketio import SocketIO, emit
 from flask_cors import CORS
 from concurrent.futures import ThreadPoolExecutor
 
@@ -13,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from Database.db_operation import Database
 from server.dth111 import DTH111
 from yolo.video_detection import VideoDetection
-from yolo.video_stream import send_video_frames
+from yolo.video_stream import VideoStream  # Import the VideoStream class
 from Database.sensor_data import SensorData
 
 # 初始化Flask应用
@@ -31,6 +32,9 @@ dth111 = DTH111(socketio=socketio, data_queue=data_queue)
 # 初始化YOLOv8模型
 model_path = os.path.normpath('yolo/weights/yolov8n.pt')
 video_detection = VideoDetection(model_path=model_path)
+
+# Create an instance of VideoStream
+video_stream = VideoStream(socketio, video_detection, data_queue, stop_event)
 
 def websocket_thread():
     # 传感器数据线程
@@ -58,7 +62,7 @@ def video_frames_thread():
     while not stop_event.is_set():
         try:
             print("Sending video frames")
-            send_video_frames(socketio, video_detection, data_queue, stop_event)  # 处理视频帧和人数检测
+            video_stream.send_video_frames()  # 调用 VideoStream 实例的方法
         except Exception as e:
             print(f"Error in video frames thread: {e}")
             break
