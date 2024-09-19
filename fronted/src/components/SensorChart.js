@@ -1,8 +1,7 @@
 // src/components/SensorChart.js
 import React, { useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2';
-import 'chart.js/auto';
-import 'chartjs-adapter-date-fns';
+import { Grid, Container } from '@mui/material';
+import LineChart from './LineChart';
 
 const SensorChart = () => {
   const [chartData, setChartData] = useState([]);
@@ -25,6 +24,9 @@ const SensorChart = () => {
     };
   }, []);
 
+  const temperatureData = chartData.map(item => ({ x: item.timestamp, y: item.temperature }));
+  const humidityData = chartData.map(item => ({ x: item.timestamp, y: item.humidity }));
+
   const chartOptions = {
     scales: {
       x: {
@@ -37,50 +39,51 @@ const SensorChart = () => {
           text: 'Time',
         },
       },
-      y1: {
-        type: 'linear',
-        position: 'left',
-        min: 15,
-        max: 35,
+      y: {
         title: {
           display: true,
-          text: 'Temperature (°C)',
-        },
-      },
-      y2: {
-        type: 'linear',
-        position: 'right',
-        min: 0,
-        max: 100,
-        title: {
-          display: true,
-          text: 'Humidity (%)',
+          text: 'Value',
         },
       },
     },
   };
 
-  const data = {
-    labels: chartData.map((entry) => new Date(entry.timestamp)),
+  const temperatureChartData = {
     datasets: [
       {
-        label: 'Temperature (°C)',
-        data: chartData.map((entry) => entry.temperature),
+        label: 'Temperature',
+        data: temperatureData,
         borderColor: 'rgba(255, 99, 132, 1)',
         backgroundColor: 'rgba(255, 99, 132, 0.2)',
-        yAxisID: 'y1',
-      },
-      {
-        label: 'Humidity (%)',
-        data: chartData.map((entry) => entry.humidity),
-        borderColor: 'rgba(54, 162, 235, 1)',
-        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-        yAxisID: 'y2',
+        fill: false,
       },
     ],
   };
 
-  return <Line data={data} options={chartOptions} />;
+  const humidityChartData = {
+    datasets: [
+      {
+        label: 'Humidity',
+        data: humidityData,
+        borderColor: 'rgba(54, 162, 235, 1)',
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        fill: false,
+      },
+    ],
+  };
+
+  return (
+    <Container>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <LineChart data={temperatureChartData} options={chartOptions} title="Temperature Chart" />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <LineChart data={humidityChartData} options={chartOptions} title="Humidity Chart" />
+        </Grid>
+      </Grid>
+    </Container>
+  );
 };
 
 export default SensorChart;
