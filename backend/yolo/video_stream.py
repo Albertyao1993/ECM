@@ -38,13 +38,13 @@ class VideoStream:
             if time_elapsed > 1.0 / self.frame_rate:
                 self.prev = time.time()
                 # Resize the frame to reduce size
-                frame = cv2.resize(frame, (640, 480))
+                frame = cv2.resize(frame, (320, 240))
 
                 # Perform detection and get person count along with bounding boxes
                 frame, person_count, boxes = self.video_detection.detect_frame_with_boxes(frame)
 
                 # Encode the frame in JPEG format with lower quality
-                ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+                ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 10])
                 if not ret:
                     print("Error: Could not encode frame.")
                     continue
