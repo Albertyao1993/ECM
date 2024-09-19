@@ -5,14 +5,15 @@ import os
 from flask_socketio import SocketIO
 from yolo.video_detection import VideoDetection
 from queue import Queue
-from threading import Event
+from threading import Event, Lock
 
 class VideoStream:
-    def __init__(self, socketio: SocketIO, video_detection: VideoDetection, data_queue: Queue, stop_event: Event):
+    def __init__(self, socketio: SocketIO, video_detection: VideoDetection, data_queue: Queue, stop_event: Event, lock: Lock):
         self.socketio = socketio
         self.video_detection = video_detection
         self.data_queue = data_queue
         self.stop_event = stop_event
+        self.lock = lock
         self.frame_rate = 10
         self.prev = 0
 
@@ -58,10 +59,11 @@ class VideoStream:
                 })
 
                 # 将人数数据发送到队列中
-                if not self.data_queue.empty():
-                    latest_data_point = self.data_queue.get()
-                    latest_data_point.person_count = person_count
-                    self.data_queue.put(latest_data_point)
+                with self.lock:
+                    if not self.data_queue.empty():
+                        latest_data_point = self.data_queue.get()
+                        latest_data_point.person_count = person_count
+                        self.data_queue.put(latest_data_point)
 
         cap.release()
         cv2.destroyAllWindows()
