@@ -70,8 +70,8 @@ class DTH111:
                     with self.lock:
                         self.data_queue.put(new_data_point)
                     
-                    # 通过 WebSocket 发送数据
-                    self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
+                    # # 通过 WebSocket 发送数据
+                    # self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
                 
                 # 每2秒读取一次数据
                 time.sleep(2)
