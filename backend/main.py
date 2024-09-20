@@ -12,6 +12,7 @@ from server.dth111 import DTH111
 from yolo.video_detection import VideoDetection
 from yolo.video_stream import VideoStream  # Import the VideoStream class
 from Database.sensor_data import SensorData
+from open_weather.weather import OpenWeather
 import time
 import datetime
 
@@ -27,7 +28,11 @@ lock = Lock()  # 用于确保线程安全
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
 dth111 = DTH111(socketio=socketio, data_queue=data_queue, lock=lock)
 
-model_path = os.path.normpath('YOLO/weights/yolov8n.pt')
+api_key = 'fa3005c77c9d4631ef729307d175661f'
+city = 'Darmstadt'
+open_weather = OpenWeather(api_key, city)
+
+model_path = os.path.normpath('yolo/weights/yolov8n.pt')
 video_detection = VideoDetection(model_path=model_path)
 
 # Create an instance of VideoStream
@@ -48,6 +53,13 @@ def database_thread():
             time.sleep(60)  # 每60秒插入一次数据
             if not data_queue.empty():
                 latest_data_point = data_queue.get()
+
+                weather_data = open_weather.get_weather_data()
+                latest_data_point.ow_temperture = weather_data['ow_temperature']
+                latest_data_point.ow_humidity = weather_data['ow_humidity']
+                latest_data_point.ow_weather_desc = weather_data['ow_weather_desc']
+
+
                 db.create(latest_data_point.to_dict())
                 print(f"Stored data: {latest_data_point.to_dict()}")
         except Exception as e:
@@ -109,7 +121,7 @@ def handle_ice_candidate(data):
 executor = ThreadPoolExecutor(max_workers=4)
 executor.submit(websocket_thread)
 executor.submit(database_thread)
-executor.submit(video_frames_thread)
+# executor.submit(video_frames_thread)
 
 def signal_handler(sig, frame):
     print('Terminating...')
