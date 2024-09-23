@@ -19,7 +19,7 @@ const SensorChart = () => {
 
         // console.log('startISO:', startISO);
         // console.log('endISO:', endISO);
-
+        
         // 构建请求URL，包含时间范围参数
         const response = await fetch(`http://127.0.0.1:5000/data/history?start_time=${startISO}&end_time=${endISO}`);
         const data = await response.json();
