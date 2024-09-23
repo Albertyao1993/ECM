@@ -1,7 +1,7 @@
 # DHT111. py load the data from the sensor and send it to the client.
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_socketio import SocketIO
 import platform
 import serial
@@ -53,7 +53,7 @@ class DTH111:
                     temperature, humidity = line.split(',')
 
                     # 格式化时间戳
-                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    timestamp = datetime.now(timezone.utc)
 
                     new_data_point = SensorData(
                         timestamp=timestamp,

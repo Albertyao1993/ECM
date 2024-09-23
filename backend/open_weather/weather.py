@@ -11,7 +11,7 @@ class OpenWeather:
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            print(data)  # 打印天气数据
+            # print(data)  # 打印天气数据
             return {
                 "ow_temperature": data["main"]["temp"],
                 "ow_humidity": data["main"]["humidity"],

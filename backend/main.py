@@ -14,7 +14,9 @@ from yolo.video_stream import VideoStream  # Import the VideoStream class
 from Database.sensor_data import SensorData
 from open_weather.weather import OpenWeather
 import time
-import datetime
+# import datetime
+from datetime import datetime, timezone
+from dateutil import parser
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -55,10 +57,11 @@ def database_thread():
                 latest_data_point = data_queue.get()
 
                 weather_data = open_weather.get_weather_data()
-                latest_data_point.ow_temperture = weather_data['ow_temperature']
+                latest_data_point.ow_temperature = weather_data['ow_temperature']
                 latest_data_point.ow_humidity = weather_data['ow_humidity']
                 latest_data_point.ow_weather_desc = weather_data['ow_weather_desc']
 
+                print(f"Inserting data into database: {latest_data_point.to_dict()}")
 
                 db.create(latest_data_point.to_dict())
                 print(f"Stored data: {latest_data_point.to_dict()}")
@@ -86,15 +89,28 @@ def get_data():
 
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
-    start_time = request.args.get('start_time')
-    end_time = request.args.get('end_time')
-    if start_time and end_time:
-        start_time = datetime.datetime.fromisoformat(start_time)
-        end_time = datetime.datetime.fromisoformat(end_time)
-        data = db.read_by_time_range(start_time, end_time)
+    start_time_str = request.args.get('start_time')
+    end_time_str = request.args.get('end_time')
+
+    if not start_time_str or not end_time_str:
+        # 如果未提供时间范围，默认返回过去30分钟的数据
+        end_time = datetime.now(timezone.utc)
+        start_time = end_time - datetime.timedelta(minutes=30)
     else:
-        data = db.read_all()
+        # 解析时间字符串，并转换为 UTC 时区
+        start_time = parser.isoparse(start_time_str).astimezone(timezone.utc)
+        end_time = parser.isoparse(end_time_str).astimezone(timezone.utc)
+
+    print(f"Received request for data between {start_time} and {end_time}")
+
+    data = db.read_by_time_range(start_time, end_time)
     return jsonify(data)
+
+@app.route('/data/all', methods=['GET'])
+def get_all_data():
+    data = db.read_all()
+    return jsonify(data)
+
 
 @socketio.on('connect')
 def handle_connect():
@@ -104,18 +120,7 @@ def handle_connect():
 def handle_disconnect():
     print('Client disconnected')
 
-# # WebRTC signaling
-# @socketio.on('offer')
-# def handle_offer(data):
-#     socketio.emit('offer', data, broadcast=True)
 
-# @socketio.on('answer')
-# def handle_answer(data):
-#     socketio.emit('answer', data, broadcast=True)
-
-# @socketio.on('ice-candidate')
-# def handle_ice_candidate(data):
-#     socketio.emit('ice-candidate', data, broadcast=True)
 
 # Use ThreadPoolExecutor to manage threads
 executor = ThreadPoolExecutor(max_workers=4)

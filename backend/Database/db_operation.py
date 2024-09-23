@@ -1,6 +1,8 @@
+import datetime
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
+from datetime import datetime
 
 class Database:
     def __init__(self, uri, db_name, collection_name):
@@ -47,8 +49,13 @@ class Database:
     def read_by_time_range(self, start_time, end_time):
         """根据时间范围读取记录"""
         query = {"timestamp": {"$gte": start_time, "$lte": end_time}}
-        records = list(self.collection.find(query))
+        print(f"Executing query: {query}")
+        records = list(self.collection.find(query, {'_id': False}))
+        print(f"Found {len(records)} records")
+        # 将 datetime 对象转换为字符串，便于 JSON 序列化
         for record in records:
-            if '_id' in record:
-                record['_id'] = str(record['_id'])
+            if isinstance(record.get('timestamp'), datetime):
+                record['timestamp'] = record['timestamp'].isoformat()
         return records
+
+    
