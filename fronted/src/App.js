@@ -11,7 +11,7 @@ function App() {
         <Grid item xs={12}>
           <LiveStream />
         </Grid>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12}>
           <SensorChart />
         </Grid>
       </Grid>

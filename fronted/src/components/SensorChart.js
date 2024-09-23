@@ -1,6 +1,6 @@
 // src/components/SensorChart.js
 import React, { useEffect, useState } from 'react';
-import { Grid, Container } from '@mui/material';
+import { Grid, Paper } from '@mui/material';
 import LineChart from './LineChart';
 
 const SensorChart = () => {
@@ -73,16 +73,19 @@ const SensorChart = () => {
   };
 
   return (
-    <Container>
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6}>
+
+    <Grid container spacing={2}>
+      <Grid item xs={12} md={6}>
+        <Paper elevation={3}>
           <LineChart data={temperatureChartData} options={chartOptions} title="Temperature Chart" />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <LineChart data={humidityChartData} options={chartOptions} title="Humidity Chart" />
-        </Grid>
+        </Paper>
       </Grid>
-    </Container>
+      <Grid item xs={12} md={6}>
+        <Paper elevation={3}>
+          <LineChart data={humidityChartData} options={chartOptions} title="Humidity Chart" />
+        </Paper>
+      </Grid>
+    </Grid>
   );
 };
 
