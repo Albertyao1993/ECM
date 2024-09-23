@@ -1,10 +1,44 @@
 import React, { useEffect, useState } from 'react';
+import { Line } from 'react-chartjs-2';
 import { Grid, Paper } from '@mui/material';
-import LineChart from './LineChart';
+import axios from 'axios';
 
 const SensorChart = () => {
-  const [temperatureData, setTemperatureData] = useState([]);
-  const [humidityData, setHumidityData] = useState([]);
+  const [temperatureData, setTemperatureData] = useState({
+    labels: [],
+    datasets: [
+      {
+        label: 'Indoor Temperature (°C)',
+        data: [],
+        borderColor: 'rgba(75,192,192,1)',
+        fill: false,
+      },
+      {
+        label: 'Outdoor Temperature (°C)',
+        data: [],
+        borderColor: 'rgba(255,99,132,1)',
+        fill: false,
+      },
+    ],
+  });
+
+  const [humidityData, setHumidityData] = useState({
+    labels: [],
+    datasets: [
+      {
+        label: 'Indoor Humidity (%)',
+        data: [],
+        borderColor: 'rgba(153,102,255,1)',
+        fill: false,
+      },
+      {
+        label: 'Outdoor Humidity (%)',
+        data: [],
+        borderColor: 'rgba(54,162,235,1)',
+        fill: false,
+      },
+    ],
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -17,126 +51,87 @@ const SensorChart = () => {
         const startISO = startTime.toISOString();
         const endISO = endTime.toISOString();
 
-        // console.log('startISO:', startISO);
-        // console.log('endISO:', endISO);
-        
-        // 构建请求URL，包含时间范围参数
-        const response = await fetch(`http://127.0.0.1:5000/data/history?start_time=${startISO}&end_time=${endISO}`);
-        const data = await response.json();
+        // console.log(`Start Time is : ${startISO}`);
+
+        const response = await axios.get(`http://127.0.0.1:5000/data/history?start_time=${startISO}&end_time=${endISO}`);
+        const data = await response.data;
 
         // 解析数据
         const tempData = data.map(item => {
-          // 将时间字符串转换为 Date 对象
-          const utcDate = new Date(item.timestamp);
-          // 获取本地时间的毫秒数
-          const localTime = utcDate.getTime() + (utcDate.getTimezoneOffset() * 60000);
-          // 创建新的本地 Date 对象
-          const localDate = new Date(localTime);
-
+          const localDate = new Date(item.timestamp);
+          // console.log(`Local Data is : ${localDate.toLocaleString()}`);
           return {
-            x: localDate,
+            x: localDate.toLocaleString(), // 使用 toLocaleString() 确保显示本地时间
             y: item.temperature,
             owY: item.ow_temperature,
           };
         });
 
         const humData = data.map(item => {
-          const utcDate = new Date(item.timestamp);
-          const localTime = utcDate.getTime() + (utcDate.getTimezoneOffset() * 60000);
-          const localDate = new Date(localTime);
-
+          const localDate = new Date(item.timestamp);
           return {
-            x: localDate,
+            x: localDate.toLocaleString(), // 使用 toLocaleString() 确保显示本地时间
             y: item.humidity,
             owY: item.ow_humidity,
           };
         });
 
-        setTemperatureData(tempData);
-        setHumidityData(humData);
+        setTemperatureData({
+          labels: tempData.map(d => d.x),
+          datasets: [
+            {
+              label: 'Indoor Temperature (°C)',
+              data: tempData.map(d => d.y),
+              borderColor: 'rgba(75,192,192,1)',
+              fill: false,
+            },
+            {
+              label: 'Outdoor Temperature (°C)',
+              data: tempData.map(d => d.owY),
+              borderColor: 'rgba(255,99,132,1)',
+              fill: false,
+            },
+          ],
+        });
+
+        setHumidityData({
+          labels: humData.map(d => d.x),
+          datasets: [
+            {
+              label: 'Indoor Humidity (%)',
+              data: humData.map(d => d.y),
+              borderColor: 'rgba(153,102,255,1)',
+              fill: false,
+            },
+            {
+              label: 'Outdoor Humidity (%)',
+              data: humData.map(d => d.owY),
+              borderColor: 'rgba(54,162,235,1)',
+              fill: false,
+            },
+          ],
+        });
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching sensor data:', error);
       }
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 5000); // 每5秒刷新一次数据
-    return () => {
-      clearInterval(intervalId);
-    };
+    const interval = setInterval(fetchData, 60000); // 每分钟刷新一次数据
+
+    return () => clearInterval(interval);
   }, []);
-
-  const chartOptions = {
-    scales: {
-      x: {
-        type: 'time',
-        time: {
-          unit: 'minute',
-        },
-        title: {
-          display: true,
-          text: 'Time',
-        },
-      },
-      y: {
-        title: {
-          display: true,
-          text: 'Value',
-        },
-      },
-    },
-  };
-
-  // 构建温度图表数据
-  const temperatureChartData = {
-    datasets: [
-      {
-        label: 'Sensor Temperature',
-        data: temperatureData.map(item => ({ x: item.x, y: item.y })),
-        borderColor: 'rgba(255, 99, 132, 1)', // 红色
-        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-        fill: false,
-      },
-      {
-        label: 'OpenWeather Temperature',
-        data: temperatureData.map(item => ({ x: item.x, y: item.owY })),
-        borderColor: 'rgba(255, 159, 64, 1)', // 橙色
-        backgroundColor: 'rgba(255, 159, 64, 0.2)',
-        fill: false,
-      },
-    ],
-  };
-
-  // 构建湿度图表数据
-  const humidityChartData = {
-    datasets: [
-      {
-        label: 'Sensor Humidity',
-        data: humidityData.map(item => ({ x: item.x, y: item.y })),
-        borderColor: 'rgba(54, 162, 235, 1)', // 蓝色
-        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-        fill: false,
-      },
-      {
-        label: 'OpenWeather Humidity',
-        data: humidityData.map(item => ({ x: item.x, y: item.owY })),
-        borderColor: 'rgba(75, 192, 192, 1)', // 绿色
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        fill: false,
-      },
-    ],
-  };
 
   return (
     <Grid container spacing={2}>
       <Grid item xs={12} md={6}>
-        <Paper elevation={3} style={{ padding: '16px' }}>
-          <LineChart data={temperatureChartData} options={chartOptions} title="Temperature Chart" />
+        <Paper elevation={3}>
+          <Line data={temperatureData} />
         </Paper>
       </Grid>
       <Grid item xs={12} md={6}>
-        <Paper elevation={3} style={{ padding: '16px' }}>
-          <LineChart data={humidityChartData} options={chartOptions} title="Humidity Chart" />
+        <Paper elevation={3}>
+          <Line data={humidityData} />
         </Paper>
       </Grid>
     </Grid>

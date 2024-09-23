@@ -15,7 +15,7 @@ from Database.sensor_data import SensorData
 from open_weather.weather import OpenWeather
 import time
 # import datetime
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from dateutil import parser
 
 app = Flask(__name__)
@@ -95,7 +95,7 @@ def get_data_history():
     if not start_time_str or not end_time_str:
         # 如果未提供时间范围，默认返回过去30分钟的数据
         end_time = datetime.now(timezone.utc)
-        start_time = end_time - datetime.timedelta(minutes=30)
+        start_time = end_time - timedelta(minutes=30)
     else:
         # 解析时间字符串，并转换为 UTC 时区
         start_time = parser.isoparse(start_time_str).astimezone(timezone.utc)

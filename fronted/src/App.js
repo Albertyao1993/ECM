@@ -3,6 +3,26 @@ import React from 'react';
 import { Container, Grid } from '@mui/material';
 import SensorChart from './components/SensorChart';
 import LiveStream from './components/LiveStream';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 function App() {
   return (
