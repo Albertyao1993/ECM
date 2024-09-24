@@ -50,7 +50,7 @@ class DTH111:
                 line = ser.readline().decode('utf-8').strip()
                 if line:
                     # print(f"Received data: {line}")
-                    temperature, humidity = line.split(',')
+                    temperature, humidity,light = line.split(',')
 
                     # 格式化时间戳
                     timestamp = datetime.now(timezone.utc).astimezone() 
@@ -58,7 +58,8 @@ class DTH111:
                     new_data_point = SensorData(
                         timestamp=timestamp,
                         temperature=float(temperature),
-                        humidity=float(humidity)
+                        humidity=float(humidity),
+                        light=float(light)
                     )
                     # self.data.append(new_data_point)
                     

@@ -13,6 +13,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import LightSensorChart from './components/LightSensorChart';
 
 ChartJS.register(
   CategoryScale,
@@ -33,6 +34,9 @@ function App() {
         </Grid>
         <Grid item xs={12}>
           <SensorChart />
+        </Grid>
+        <Grid item xs={12}>
+          <LightSensorChart />
         </Grid>
       </Grid>
     </Container>
