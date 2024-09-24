@@ -137,7 +137,7 @@ const SensorChart = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 60000); // 每分钟刷新一次数据
+    const interval = setInterval(fetchData, 10000); // 每分钟刷新一次数据
 
     return () => clearInterval(interval);
   }, []);
