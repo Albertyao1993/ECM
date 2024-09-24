@@ -40,12 +40,12 @@ video_detection = VideoDetection(model_path=model_path)
 # Create an instance of VideoStream
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
 
-def websocket_thread():
+def load_sensor_data():
     # 传感器数据线程
     print("Starting sensor data thread")
     while not stop_event.is_set():
         dth111.read_sensor_data()
-        time.sleep(0.5)
+        # time.sleep(0.5)
 
 def database_thread():
     # 数据库处理线程
@@ -82,10 +82,10 @@ def video_frames_thread():
 # 开启YOLO检测
 video_detection.start_detection()
 
-@app.route('/data', methods=['GET'])
-def get_data():
-    # 返回传感器数据
-    return jsonify(dth111.get_data())
+# @app.route('/data', methods=['GET'])
+# def get_data():
+#     # 返回传感器数据
+#     return jsonify(dth111.get_data())
 
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
@@ -94,7 +94,7 @@ def get_data_history():
 
     if not start_time_str or not end_time_str:
         # 如果未提供时间范围，默认返回过去30分钟的数据
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(timezone.utc).isoformat()
         start_time = end_time - timedelta(minutes=30)
     else:
         # 解析时间字符串，并转换为 UTC 时区
@@ -124,7 +124,7 @@ def handle_disconnect():
 
 # Use ThreadPoolExecutor to manage threads
 executor = ThreadPoolExecutor(max_workers=4)
-executor.submit(websocket_thread)
+executor.submit(load_sensor_data)
 executor.submit(database_thread)
 # executor.submit(video_frames_thread)
 

@@ -52,6 +52,7 @@ class Database:
         print(f"Executing query: {query}")
         records = list(self.collection.find(query, {'_id': False}))
         print(f"Found {len(records)} records")
+        print(records)
         # 将 datetime 对象转换为字符串，便于 JSON 序列化
         for record in records:
             if isinstance(record.get('timestamp'), datetime):

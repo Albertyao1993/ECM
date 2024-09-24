@@ -51,26 +51,46 @@ const SensorChart = () => {
         const startISO = startTime.toISOString();
         const endISO = endTime.toISOString();
 
-        // console.log(`Start Time is : ${startISO}`);
-
         const response = await axios.get(`http://127.0.0.1:5000/data/history?start_time=${startISO}&end_time=${endISO}`);
-        const data = await response.data;
+        const data = response.data;
+        console.log('Response data:', data); // 打印完整的响应数据
+        console.log(typeof data[0].timestamp); // 打印数据类型
+        console.log(data[0].timestamp); // 打印数据
 
         // 解析数据
         const tempData = data.map(item => {
-          const localDate = new Date(item.timestamp);
-          // console.log(`Local Data is : ${localDate.toLocaleString()}`);
+          const utcDate = new Date(item.timestamp);
+          const berlinDate = new Intl.DateTimeFormat('de-DE', {
+            timeZone: 'Europe/Berlin',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }).format(utcDate);
+          console.log(`berlinDate: ${berlinDate}`); // 打印柏林时间
           return {
-            x: localDate.toLocaleString(), // 使用 toLocaleString() 确保显示本地时间
+            x: berlinDate, // 使用柏林时间
             y: item.temperature,
             owY: item.ow_temperature,
           };
         });
 
         const humData = data.map(item => {
-          const localDate = new Date(item.timestamp);
+          const utcDate = new Date(item.timestamp);
+          const berlinDate = new Intl.DateTimeFormat('de-DE', {
+            timeZone: 'Europe/Berlin',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }).format(utcDate);
+          console.log(`berlinDate: ${berlinDate}`); // 打印柏林时间
           return {
-            x: localDate.toLocaleString(), // 使用 toLocaleString() 确保显示本地时间
+            x: berlinDate, // 使用柏林时间
             y: item.humidity,
             owY: item.ow_humidity,
           };

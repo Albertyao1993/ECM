@@ -13,7 +13,7 @@ from queue import Queue
 class DTH111:
     def __init__(self, socketio: SocketIO, data_queue: Queue, lock: Lock):
         self.socketio = socketio
-        self.data = []
+        # self.data = []
         self.data_queue = data_queue
         self.lock = lock
 
@@ -49,22 +49,22 @@ class DTH111:
             while True:
                 line = ser.readline().decode('utf-8').strip()
                 if line:
-                    print(f"Received data: {line}")
+                    # print(f"Received data: {line}")
                     temperature, humidity = line.split(',')
 
                     # 格式化时间戳
-                    timestamp = datetime.now(timezone.utc)
+                    timestamp = datetime.now(timezone.utc).astimezone() 
 
                     new_data_point = SensorData(
                         timestamp=timestamp,
                         temperature=float(temperature),
                         humidity=float(humidity)
                     )
-                    self.data.append(new_data_point)
+                    # self.data.append(new_data_point)
                     
                     # 只保留最新的20个数据点
-                    if len(self.data) > 20:
-                        self.data.pop(0)
+                    # if len(self.data) > 20:
+                    #     self.data.pop(0)
                     
                     # 将数据发送到队列中
                     with self.lock:
@@ -74,7 +74,7 @@ class DTH111:
                     # self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
                 
                 # 每2秒读取一次数据
-                time.sleep(2)
+                time.sleep(60)
         except Exception as e:
             print(f"Error reading sensor data: {e}")
         finally:

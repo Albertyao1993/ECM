@@ -9,6 +9,7 @@ class SensorData():
 
     ow_temperature: float = 0.0  
     ow_humidity: float = 0.0
+    
     ow_weather_desc: str = ""
 
     person_count: int = 0
