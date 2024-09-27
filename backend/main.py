@@ -125,7 +125,7 @@ def handle_disconnect():
 # Use ThreadPoolExecutor to manage threads
 executor = ThreadPoolExecutor(max_workers=4)
 executor.submit(load_sensor_data)
-executor.submit(database_thread)
+# executor.submit(database_thread)
 # executor.submit(video_frames_thread)
 
 def signal_handler(sig, frame):

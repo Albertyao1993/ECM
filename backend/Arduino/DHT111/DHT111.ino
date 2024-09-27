@@ -2,8 +2,9 @@
 #include <BH1750.h>
 #include <DHT.h>
 
-#define DHTPIN 2     // DHT 传感器连接到数字引脚 2
-#define DHTTYPE DHT11   // DHT 11 传感器类型
+#define DHTPIN 2      // DHT 传感器连接到数字引脚 2
+#define DHTTYPE DHT11 // DHT 11 传感器类型
+#define SOUND_PIN 7   // 声音传感器连接到数字引脚 7
 
 DHT dht(DHTPIN, DHTTYPE);
 BH1750 lightMeter;
@@ -13,6 +14,7 @@ void setup() {
   dht.begin();
   Wire.begin();
   lightMeter.begin();
+  pinMode(SOUND_PIN, INPUT); // 设置声音传感器引脚为输入模式
 }
 
 void loop() {
@@ -36,11 +38,19 @@ void loop() {
     return;
   }
 
+  // 读取声音传感器数据
+  int soundState = digitalRead(SOUND_PIN);
+
   // 将数据发送到串口
- 
   Serial.print(temperature);
   Serial.print(",");
   Serial.print(humidity);
   Serial.print(",");
-  Serial.println(lux);
+  Serial.print(lux);
+  Serial.print(",");
+  if (soundState == HIGH) {
+    Serial.println("1");
+  } else {
+    Serial.println("0");
+  }
 }

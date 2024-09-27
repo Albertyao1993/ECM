@@ -49,8 +49,8 @@ class DTH111:
             while True:
                 line = ser.readline().decode('utf-8').strip()
                 if line:
-                    # print(f"Received data: {line}")
-                    temperature, humidity,light = line.split(',')
+                    print(f"Received data: {line}")
+                    temperature, humidity,light, ac_status = line.split(',')
 
                     # 格式化时间戳
                     timestamp = datetime.now(timezone.utc).astimezone() 
@@ -59,10 +59,11 @@ class DTH111:
                         timestamp=timestamp,
                         temperature=float(temperature),
                         humidity=float(humidity),
-                        light=float(light)
+                        light=float(light),
+                        ac_state=bool(ac_status)
                     )
                     # self.data.append(new_data_point)
-                    
+                    print(f"New data point: {new_data_point.to_dict()}")
                     # 只保留最新的20个数据点
                     # if len(self.data) > 20:
                     #     self.data.pop(0)
