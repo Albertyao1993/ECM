@@ -3,6 +3,7 @@ import React from 'react';
 import { Container, Grid } from '@mui/material';
 import SensorChart from './components/SensorChart';
 import LiveStream from './components/LiveStream';
+import SensorStatus from './components/SensorStatus';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -31,6 +32,7 @@ function App() {
       <Grid container spacing={2}>
         <Grid item xs={12}>
           <LiveStream />
+          <SensorStatus />
         </Grid>
         <Grid item xs={12}>
           <SensorChart />

@@ -6,8 +6,10 @@ class SensorData():
     temperature: float
     humidity: float
     light: float
+
     timestamp: datetime
     ac_state: bool = False 
+    windows_state: bool = False
 
     ow_temperature: float = 0.0  
     ow_humidity: float = 0.0

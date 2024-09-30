@@ -87,6 +87,22 @@ video_detection.start_detection()
 #     # 返回传感器数据
 #     return jsonify(dth111.get_data())
 
+@app.route('/data/ac_state', methods=['GET'])
+def get_current_data():
+    try:
+        # Assuming you have a method to get the latest data point
+        latest_data_point = db.read_latest()
+        if latest_data_point:
+            return jsonify({
+                'ac_state': latest_data_point.get('ac_state', False),
+                'window_state': latest_data_point.get('window_state', False)
+            })
+        else:
+            return jsonify({'error': 'No data available'}), 404
+    except Exception as e:
+        print(f"Error fetching current data: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
     start_time_str = request.args.get('start_time')
@@ -125,8 +141,8 @@ def handle_disconnect():
 # Use ThreadPoolExecutor to manage threads
 executor = ThreadPoolExecutor(max_workers=4)
 executor.submit(load_sensor_data)
-# executor.submit(database_thread)
-# executor.submit(video_frames_thread)
+executor.submit(database_thread)
+executor.submit(video_frames_thread)
 
 def signal_handler(sig, frame):
     print('Terminating...')

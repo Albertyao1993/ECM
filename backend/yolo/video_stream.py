@@ -30,40 +30,48 @@ class VideoStream:
             return
 
         while self.video_detection.running and cap.isOpened() and not self.stop_event.is_set():
-            time_elapsed = time.time() - self.prev
             ret, frame = cap.read()
             if not ret:
                 print("Error: Could not read frame from video stream.")
                 break
-            if time_elapsed > 1.0 / self.frame_rate:
-                self.prev = time.time()
-                # Resize the frame to reduce size
-                frame = cv2.resize(frame, (320, 240))
+       
+            # # Resize the frame to reduce size
+            # frame = cv2.resize(frame, (320, 240))
 
-                # Perform detection and get person count along with bounding boxes
-                frame, person_count, boxes = self.video_detection.detect_frame_with_boxes(frame)
+            # Perform detection and get person count along with bounding boxes
+            frame, person_count, boxes = self.video_detection.detect_frame_with_boxes(frame)
 
-                # Encode the frame in JPEG format with lower quality
-                ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 10])
-                if not ret:
-                    print("Error: Could not encode frame.")
-                    continue
+            for box in boxes:
+                x, y, w, h = box
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-                frame_encoded = base64.b64encode(buffer).decode('utf-8')
+            cv2.putText(frame, f'Person count: {person_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.imshow('Video Stream', frame)
 
-                # Send the frame, person count, and bounding boxes via WebSocket
-                self.socketio.emit('video_frame', {
-                    'frame': frame_encoded,
-                    'person_count': person_count,
-                    'boxes': boxes  # Bounding boxes information
-                })
+            # Encode the frame in JPEG format with lower quality
+            ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 10])
+            if not ret:
+                print("Error: Could not encode frame.")
+                continue
 
-                # 将人数数据发送到队列中
-                with self.lock:
-                    if not self.data_queue.empty():
-                        latest_data_point = self.data_queue.get()
-                        latest_data_point.person_count = person_count
-                        self.data_queue.put(latest_data_point)
+            frame_encoded = base64.b64encode(buffer).decode('utf-8')
+
+            # Send the frame, person count, and bounding boxes via WebSocket
+            self.socketio.emit('video_frame', {
+                'frame': frame_encoded,
+                'person_count': person_count,
+                'boxes': boxes  # Bounding boxes information
+            })
+
+            # 将人数数据发送到队列中
+            with self.lock:
+                if not self.data_queue.empty():
+                    latest_data_point = self.data_queue.get()
+                    latest_data_point.person_count = person_count
+                    self.data_queue.put(latest_data_point)
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
         cap.release()
         cv2.destroyAllWindows()
