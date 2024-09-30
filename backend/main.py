@@ -92,6 +92,7 @@ def get_current_data():
     try:
         # Assuming you have a method to get the latest data point
         latest_data_point = db.read_latest()
+        print(f"Latest data point: {latest_data_point}")
         if latest_data_point:
             return jsonify({
                 'ac_state': latest_data_point.get('ac_state', False),
@@ -142,7 +143,7 @@ def handle_disconnect():
 executor = ThreadPoolExecutor(max_workers=4)
 executor.submit(load_sensor_data)
 executor.submit(database_thread)
-executor.submit(video_frames_thread)
+# executor.submit(video_frames_thread)
 
 def signal_handler(sig, frame):
     print('Terminating...')

@@ -59,4 +59,13 @@ class Database:
                 record['timestamp'] = record['timestamp'].isoformat()
         return records
 
-    
+    def read_latest(self):
+        """读取最新的一条记录"""
+        try:
+            latest_record = self.collection.find_one({}, sort=[("timestamp", -1)], projection={'_id': False})
+            if latest_record and isinstance(latest_record.get('timestamp'), datetime):
+                latest_record['timestamp'] = latest_record['timestamp'].isoformat()
+            return latest_record
+        except Exception as e:
+            print(f"Error reading latest record: {e}")
+            return None
