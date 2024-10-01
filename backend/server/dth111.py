@@ -54,13 +54,14 @@ class DTH111:
 
                     # 格式化时间戳
                     timestamp = datetime.now(timezone.utc).astimezone() 
+                    ac_status = not bool(ac_status)
 
                     new_data_point = SensorData(
                         timestamp=timestamp,
                         temperature=float(temperature),
                         humidity=float(humidity),
                         light=float(light),
-                        ac_state=bool(ac_status)
+                        ac_state= ac_status
                     )
                     # self.data.append(new_data_point)
                     print(f"New data point: {new_data_point.to_dict()}")
