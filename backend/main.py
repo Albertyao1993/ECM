@@ -12,8 +12,11 @@ from server.dth111 import DTH111
 from yolo.video_detection import VideoDetection
 from yolo.video_stream import VideoStream  # Import the VideoStream class
 from Database.sensor_data import SensorData
+from open_weather.weather import OpenWeather
 import time
-import datetime
+# import datetime
+from datetime import datetime, timezone, timedelta
+from dateutil import parser
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -27,18 +30,22 @@ lock = Lock()  # 用于确保线程安全
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
 dth111 = DTH111(socketio=socketio, data_queue=data_queue, lock=lock)
 
-model_path = os.path.normpath('YOLO/weights/yolov8n.pt')
+api_key = 'fa3005c77c9d4631ef729307d175661f'
+city = 'Darmstadt'
+open_weather = OpenWeather(api_key, city)
+
+model_path = os.path.normpath('yolo/weights/yolov8n.pt')
 video_detection = VideoDetection(model_path=model_path)
 
 # Create an instance of VideoStream
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
 
-def websocket_thread():
+def load_sensor_data():
     # 传感器数据线程
     print("Starting sensor data thread")
     while not stop_event.is_set():
         dth111.read_sensor_data()
-        time.sleep(0.5)
+        # time.sleep(0.5)
 
 def database_thread():
     # 数据库处理线程
@@ -48,6 +55,14 @@ def database_thread():
             time.sleep(60)  # 每60秒插入一次数据
             if not data_queue.empty():
                 latest_data_point = data_queue.get()
+
+                weather_data = open_weather.get_weather_data()
+                latest_data_point.ow_temperature = weather_data['ow_temperature']
+                latest_data_point.ow_humidity = weather_data['ow_humidity']
+                latest_data_point.ow_weather_desc = weather_data['ow_weather_desc']
+
+                print(f"Inserting data into database: {latest_data_point.to_dict()}")
+
                 db.create(latest_data_point.to_dict())
                 print(f"Stored data: {latest_data_point.to_dict()}")
         except Exception as e:
@@ -67,22 +82,52 @@ def video_frames_thread():
 # 开启YOLO检测
 video_detection.start_detection()
 
-@app.route('/data', methods=['GET'])
-def get_data():
-    # 返回传感器数据
-    return jsonify(dth111.get_data())
+# @app.route('/data', methods=['GET'])
+# def get_data():
+#     # 返回传感器数据
+#     return jsonify(dth111.get_data())
+
+@app.route('/data/ac_state', methods=['GET'])
+def get_current_data():
+    try:
+        # Assuming you have a method to get the latest data point
+        latest_data_point = db.read_latest()
+        print(f"Latest data point: {latest_data_point}")
+        if latest_data_point:
+            return jsonify({
+                'ac_state': latest_data_point.get('ac_state', False),
+                'window_state': latest_data_point.get('window_state', False)
+            })
+        else:
+            return jsonify({'error': 'No data available'}), 404
+    except Exception as e:
+        print(f"Error fetching current data: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
-    start_time = request.args.get('start_time')
-    end_time = request.args.get('end_time')
-    if start_time and end_time:
-        start_time = datetime.datetime.fromisoformat(start_time)
-        end_time = datetime.datetime.fromisoformat(end_time)
-        data = db.read_by_time_range(start_time, end_time)
+    start_time_str = request.args.get('start_time')
+    end_time_str = request.args.get('end_time')
+
+    if not start_time_str or not end_time_str:
+        # 如果未提供时间范围，默认返回过去30分钟的数据
+        end_time = datetime.now(timezone.utc).isoformat()
+        start_time = end_time - timedelta(minutes=30)
     else:
-        data = db.read_all()
+        # 解析时间字符串，并转换为 UTC 时区
+        start_time = parser.isoparse(start_time_str).astimezone(timezone.utc)
+        end_time = parser.isoparse(end_time_str).astimezone(timezone.utc)
+
+    print(f"Received request for data between {start_time} and {end_time}")
+
+    data = db.read_by_time_range(start_time, end_time)
     return jsonify(data)
+
+@app.route('/data/all', methods=['GET'])
+def get_all_data():
+    data = db.read_all()
+    return jsonify(data)
+
 
 @socketio.on('connect')
 def handle_connect():
@@ -92,24 +137,13 @@ def handle_connect():
 def handle_disconnect():
     print('Client disconnected')
 
-# WebRTC signaling
-@socketio.on('offer')
-def handle_offer(data):
-    socketio.emit('offer', data, broadcast=True)
 
-@socketio.on('answer')
-def handle_answer(data):
-    socketio.emit('answer', data, broadcast=True)
-
-@socketio.on('ice-candidate')
-def handle_ice_candidate(data):
-    socketio.emit('ice-candidate', data, broadcast=True)
 
 # Use ThreadPoolExecutor to manage threads
 executor = ThreadPoolExecutor(max_workers=4)
-executor.submit(websocket_thread)
+executor.submit(load_sensor_data)
 executor.submit(database_thread)
-executor.submit(video_frames_thread)
+# executor.submit(video_frames_thread)
 
 def signal_handler(sig, frame):
     print('Terminating...')

@@ -1,7 +1,7 @@
 # DHT111. py load the data from the sensor and send it to the client.
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_socketio import SocketIO
 import platform
 import serial
@@ -13,7 +13,7 @@ from queue import Queue
 class DTH111:
     def __init__(self, socketio: SocketIO, data_queue: Queue, lock: Lock):
         self.socketio = socketio
-        self.data = []
+        # self.data = []
         self.data_queue = data_queue
         self.lock = lock
 
@@ -50,31 +50,34 @@ class DTH111:
                 line = ser.readline().decode('utf-8').strip()
                 if line:
                     print(f"Received data: {line}")
-                    temperature, humidity = line.split(',')
+                    temperature, humidity,light, ac_status = line.split(',')
 
                     # 格式化时间戳
-                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    timestamp = datetime.now(timezone.utc).astimezone() 
+                    ac_status = not bool(ac_status)
 
                     new_data_point = SensorData(
                         timestamp=timestamp,
                         temperature=float(temperature),
-                        humidity=float(humidity)
+                        humidity=float(humidity),
+                        light=float(light),
+                        ac_state= ac_status
                     )
-                    self.data.append(new_data_point)
-                    
+                    # self.data.append(new_data_point)
+                    print(f"New data point: {new_data_point.to_dict()}")
                     # 只保留最新的20个数据点
-                    if len(self.data) > 20:
-                        self.data.pop(0)
+                    # if len(self.data) > 20:
+                    #     self.data.pop(0)
                     
                     # 将数据发送到队列中
                     with self.lock:
                         self.data_queue.put(new_data_point)
                     
-                    # 通过 WebSocket 发送数据
-                    self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
+                    # # 通过 WebSocket 发送数据
+                    # self.socketio.emit('sensor_data', [dp.to_dict() for dp in self.data])
                 
                 # 每2秒读取一次数据
-                time.sleep(2)
+                time.sleep(60)
         except Exception as e:
             print(f"Error reading sensor data: {e}")
         finally:

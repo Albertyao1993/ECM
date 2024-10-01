@@ -1,13 +1,26 @@
-import datetime
 from dataclasses import dataclass, asdict
+from datetime import datetime
 
 @dataclass
 class SensorData():
-
     temperature: float
     humidity: float
+    light: float
+
     timestamp: datetime
+    ac_state: bool = False 
+    windows_state: bool = False
+
+    ow_temperature: float = 0.0  
+    ow_humidity: float = 0.0
+
+    ow_weather_desc: str = ""
+
     person_count: int = 0
 
     def to_dict(self):
-        return asdict(self)
+      
+        data = asdict(self)
+        
+        return data
+

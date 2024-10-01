@@ -1,16 +1,48 @@
 // src/App.js
 import React from 'react';
+import { Container, Grid } from '@mui/material';
 import SensorChart from './components/SensorChart';
 import LiveStream from './components/LiveStream';
+import SensorStatus from './components/SensorStatus';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import LightSensorChart from './components/LightSensorChart';
 
-const App = () => {
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+function App() {
   return (
-    <div className="App">
-      <h1>Sensor Data</h1>
-      <SensorChart />
-      <LiveStream />
-    </div>
+    <Container>
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <LiveStream />
+          <SensorStatus />
+        </Grid>
+        <Grid item xs={12}>
+          <SensorChart />
+        </Grid>
+        <Grid item xs={12}>
+          <LightSensorChart />
+        </Grid>
+      </Grid>
+    </Container>
   );
-};
+}
 
 export default App;
