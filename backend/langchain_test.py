@@ -14,7 +14,7 @@ DB_NAME = "sensor_data"
 COLLECTION_NAME = "readings"
 
 # Arduino 连接设置
-ARDUINO_PORT = "COM3"  # 根据实际情况修改端口
+ARDUINO_PORT = "/dev/ttyACM0"  # 根据实际情况修改端口
 BAUD_RATE = 9600
 
 # 初始化数据库对象
