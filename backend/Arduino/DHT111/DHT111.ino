@@ -5,6 +5,7 @@
 #define DHTPIN 2      // DHT 传感器连接到数字引脚 2
 #define DHTTYPE DHT11 // DHT 11 传感器类型
 #define SOUND_PIN 7   // 声音传感器连接到数字引脚 7
+#define LED_PIN 13    // LED 连接到数字引脚 13
 
 DHT dht(DHTPIN, DHTTYPE);
 BH1750 lightMeter;
@@ -15,6 +16,7 @@ void setup() {
   Wire.begin();
   lightMeter.begin();
   pinMode(SOUND_PIN, INPUT); // 设置声音传感器引脚为输入模式
+  pinMode(LED_PIN, OUTPUT);  // 设置LED引脚为输出模式
 }
 
 void loop() {
@@ -40,6 +42,13 @@ void loop() {
 
   // 读取声音传感器数据
   int soundState = digitalRead(SOUND_PIN);
+
+  // 控制LED灯，如果光线低于50，点亮LED，否则关闭
+  if (lux < 50) {
+    digitalWrite(LED_PIN, HIGH);  // 点亮LED
+  } else {
+    digitalWrite(LED_PIN, LOW);   // 关闭LED
+  }
 
   // 将数据发送到串口
   Serial.print(temperature);
