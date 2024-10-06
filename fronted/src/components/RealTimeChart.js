@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import axios from 'axios';
 
-const SensorChart = () => {
+const RealTimeChart = () => {
   const [data, setData] = useState({
     labels: [],
     temperature: [],
@@ -13,22 +13,24 @@ const SensorChart = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/data/history');
-        const historyData = response.data;
+        const response = await axios.get('http://127.0.0.1:5000/data/realtime');
+        const newData = response.data;
         
-        setData({
-          labels: historyData.map(item => new Date(item.timestamp).toLocaleTimeString()),
-          temperature: historyData.map(item => item.temperature),
-          humidity: historyData.map(item => item.humidity),
-          light: historyData.map(item => item.light)
+        setData(prevData => {
+          const newLabels = [...prevData.labels, new Date().toLocaleTimeString()].slice(-20);
+          return {
+            labels: newLabels,
+            temperature: [...prevData.temperature, newData.temperature].slice(-20),
+            humidity: [...prevData.humidity, newData.humidity].slice(-20),
+            light: [...prevData.light, newData.light].slice(-20)
+          };
         });
       } catch (error) {
-        console.error('Error fetching history data:', error);
+        console.error('Error fetching real-time data:', error);
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // 每分钟更新一次
+    const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -53,7 +55,7 @@ const SensorChart = () => {
       },
       title: {
         display: true,
-        text: 'Sensor Data History (Last 30 Minutes)',
+        text: 'Real-time Sensor Data',
       },
     },
     scales: {
@@ -65,7 +67,7 @@ const SensorChart = () => {
 
   return (
     <div>
-      <h2>温度、湿度和光照历史数据（最近30分钟）</h2>
+      <h2>实时温度、湿度和光照数据</h2>
       <div style={{ marginBottom: '20px' }}>
         <h3>温度</h3>
         <Line options={options} data={createChartData('Temperature', data, 'rgb(255, 99, 132)')} />
@@ -82,4 +84,4 @@ const SensorChart = () => {
   );
 };
 
-export default SensorChart;
+export default RealTimeChart;

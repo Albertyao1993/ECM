@@ -1,9 +1,11 @@
 // src/App.js
 import React from 'react';
+import { BrowserRouter as Router, Route, Link, Routes } from 'react-router-dom';
 import { Container, Grid } from '@mui/material';
 import SensorChart from './components/SensorChart';
 import LiveStream from './components/LiveStream';
 import SensorStatus from './components/SensorStatus';
+import RealTimeChart from './components/RealTimeChart';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,7 +16,6 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import LightSensorChart from './components/LightSensorChart';
 
 ChartJS.register(
   CategoryScale,
@@ -28,20 +29,35 @@ ChartJS.register(
 
 function App() {
   return (
-    <Container>
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <LiveStream />
-          <SensorStatus />
+    <Router>
+      <Container>
+        <Grid container spacing={2}>
+          <Grid item xs={12}>
+            <Link to="/">Home</Link> | <Link to="/realtime">Real-Time Data</Link>
+          </Grid>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <Grid item xs={12}>
+                  <LiveStream />
+                  <SensorStatus />
+                  <SensorChart />
+                </Grid>
+              }
+            />
+            <Route
+              path="/realtime"
+              element={
+                <Grid item xs={12}>
+                  <RealTimeChart />
+                </Grid>
+              }
+            />
+          </Routes>
         </Grid>
-        <Grid item xs={12}>
-          <SensorChart />
-        </Grid>
-        <Grid item xs={12}>
-          <LightSensorChart />
-        </Grid>
-      </Grid>
-    </Container>
+      </Container>
+    </Router>
   );
 }
 

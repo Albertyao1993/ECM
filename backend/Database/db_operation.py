@@ -2,16 +2,24 @@ import datetime
 import pymongo
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
+from bson.codec_options import CodecOptions
 
 class Database:
     def __init__(self, uri, db_name, collection_name):
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
-        self.collection = self.db[collection_name]
+        # 使用 CodecOptions 来确保时间戳被视为本地时间
+        self.collection = self.db.get_collection(
+            collection_name,
+            codec_options=CodecOptions(tz_aware=False)
+        )
 
     def create(self, data):
         """插入一条新记录"""
+        # 确保时间戳是 naive datetime（无时区信息）
+        if 'timestamp' in data and isinstance(data['timestamp'], datetime):
+            data['timestamp'] = data['timestamp'].replace(tzinfo=None)
         result = self.collection.insert_one(data)
         return str(result.inserted_id)
 
@@ -49,14 +57,15 @@ class Database:
     def read_by_time_range(self, start_time, end_time):
         """根据时间范围读取记录"""
         query = {"timestamp": {"$gte": start_time, "$lte": end_time}}
-        print(f"Executing query: {query}")
+        print(f"Executing query: {query}")  # 添加这行日志
         records = list(self.collection.find(query, {'_id': False}))
-        print(f"Found {len(records)} records")
-        print(records)
+        print(f"Found {len(records)} records")  # 添加这行日志
+        
         # 将 datetime 对象转换为字符串，便于 JSON 序列化
         for record in records:
             if isinstance(record.get('timestamp'), datetime):
                 record['timestamp'] = record['timestamp'].isoformat()
+        
         return records
 
     def read_latest(self):
