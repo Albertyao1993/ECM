@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 const RealTimeChart = () => {
   const [data, setData] = useState({
@@ -80,6 +81,7 @@ const RealTimeChart = () => {
         <h3>光照</h3>
         <Line options={options} data={createChartData('Light', data, 'rgb(75, 192, 192)')} />
       </div>
+      <Link to="/">返回主页</Link>
     </div>
   );
 };

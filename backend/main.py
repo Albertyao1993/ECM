@@ -135,6 +135,11 @@ def get_data_history():
 def get_led_status():
     return jsonify({'led_status': dth111.led_status})
 
+@app.route('/data/led_stats', methods=['GET'])
+def get_led_stats():
+    stats = dth111.get_led_usage_stats()
+    return jsonify(stats)
+
 def signal_handler(sig, frame):
     print('Terminating...')
     stop_event.set()

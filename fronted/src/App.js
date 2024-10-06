@@ -1,62 +1,34 @@
-// src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Route, Link, Routes } from 'react-router-dom';
-import { Container, Grid } from '@mui/material';
+import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import SensorStatus from './components/SensorStatus';
 import SensorChart from './components/SensorChart';
 import LiveStream from './components/LiveStream';
-import SensorStatus from './components/SensorStatus';
+import LEDStats from './components/LEDStats';
 import RealTimeChart from './components/RealTimeChart';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+import './App.css'; // 确保您有这个文件来存放 CSS
 
 function App() {
   return (
     <Router>
-      <Container>
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Link to="/">Home</Link> | <Link to="/realtime">Real-Time Data</Link>
-          </Grid>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <Grid item xs={12}>
-                  <LiveStream />
-                  <SensorStatus />
-                  <SensorChart />
-                </Grid>
-              }
-            />
-            <Route
-              path="/realtime"
-              element={
-                <Grid item xs={12}>
-                  <RealTimeChart />
-                </Grid>
-              }
-            />
-          </Routes>
-        </Grid>
-      </Container>
+      <div className="App">
+        <nav className="navbar">
+          <Link to="/" className="nav-item">主页</Link>
+          <Link to="/realtime" className="nav-item">实时图表</Link>
+          <Link to="/led-stats" className="nav-item">LED 统计</Link>
+        </nav>
+
+        <Routes>
+          <Route path="/" element={
+            <>
+              <LiveStream />
+              <SensorStatus />
+              <SensorChart />
+            </>
+          } />
+          <Route path="/led-stats" element={<LEDStats />} />
+          <Route path="/realtime" element={<RealTimeChart />} />
+        </Routes>
+      </div>
     </Router>
   );
 }
