@@ -169,7 +169,7 @@ if __name__ == '__main__':
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        executor.submit(video_frames_thread)
+        # executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:
