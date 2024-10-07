@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 from datetime import datetime, timezone
 from bson.codec_options import CodecOptions
 from Database.led_status import LEDStatus
+from server.energy_calculator import EnergyCalculator
 
 class Database:
     def __init__(self, uri, db_name, collection_name):
@@ -28,6 +29,13 @@ class Database:
             print("创建了 led_status 集合")
         else:
             print("led_status 集合已存在")
+
+        # 创建能源消耗集合
+        self.energy_collection = self.db.get_collection(
+            'energy_consumption',
+            codec_options=CodecOptions(tz_aware=False)
+        )
+        self.energy_calculator = EnergyCalculator()
 
     def create(self, data):
         """插入一条新记录"""
@@ -95,8 +103,13 @@ class Database:
 
     def create_led_status(self, status_data):
         """在LED状态集合中插入新记录"""
-        result = self.led_collection.insert_one(status_data)
-        return str(result.inserted_id)
+        try:
+            result = self.led_collection.insert_one(status_data)
+            print(f"插入LED状态记录: {status_data}")
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"插入LED状态记录时发生错误: {e}")
+            return None
 
     def get_led_stats(self):
         """获取LED使用统计信息"""
@@ -122,3 +135,39 @@ class Database:
         """获取最近的LED状态历史"""
         cursor = self.led_collection.find().sort('timestamp', -1).limit(limit)
         return [LEDStatus.from_dict(doc) for doc in cursor]
+
+    def create_energy_consumption(self, energy_data):
+        """在能源消耗集合中插入新记录"""
+        result = self.energy_collection.insert_one(energy_data)
+        return str(result.inserted_id)
+
+    def get_energy_stats(self):
+        """获取能源消耗统计信息"""
+        pipeline = [
+            {
+                '$group': {
+                    '_id': None,
+                    'total_energy': {'$sum': '$energy_kwh'},
+                    'total_cost': {'$sum': '$cost'}
+                }
+            }
+        ]
+        result = list(self.energy_collection.aggregate(pipeline))
+        if result:
+            stats = result[0]
+            return {
+                'total_energy': stats.get('total_energy', 0),
+                'total_cost': stats.get('total_cost', 0)
+            }
+        return {'total_energy': 0, 'total_cost': 0}
+
+    def update_energy_consumption(self, led_status):
+        energy_kwh = self.energy_calculator.calculate_energy_consumption(led_status.duration)
+        cost = self.energy_calculator.calculate_cost(energy_kwh)
+        energy_data = {
+            'timestamp': led_status.timestamp,
+            'duration': led_status.duration,
+            'energy_kwh': energy_kwh,
+            'cost': cost
+        }
+        self.create_energy_consumption(energy_data)

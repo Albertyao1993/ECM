@@ -158,30 +158,24 @@ class DTH111:
             return
 
         try:
+            new_status = self.led_status  # 默认保持当前状态
             if light_value < 100 and self.led_status == "OFF":
                 if self.send_command("LED_ON"):
                     new_status = "ON"
-                    self.led_status = new_status
-                    self.led_on_time = current_time
                     print(f"LED 开启，当前光照值: {light_value}")
             elif light_value >= 100 and self.led_status == "ON":
                 if self.send_command("LED_OFF"):
                     new_status = "OFF"
-                    self.led_status = new_status
-                    if self.led_on_time:
-                        usage_time = current_time - self.led_on_time
-                        self.led_usage_times.append(usage_time)
-                        self.led_on_time = None
                     print(f"LED 关闭，当前光照值: {light_value}")
-            else:
-                print(f"LED 状态保持不变，当前状态: {self.led_status}，光照值: {light_value}")
-                return  # 如果状态没有改变，直接返回，不记录状态变化
+            
+            # 无论状态是否改变，都调用record_led_status_change
+            self.record_led_status_change(new_status, current_time)
+            print(f"LED 状态更新: {self.led_status} -> {new_status}")
         finally:
             self.lock.release()
-        
-        self.record_led_status_change(self.led_status, current_time)
 
     def record_led_status_change(self, new_status, timestamp):
+        print(f"记录LED状态变化: {self.led_status} -> {new_status}")
         if self.last_led_change_time:
             duration = (timestamp - self.last_led_change_time).total_seconds()
             led_status = LEDStatus(
@@ -193,11 +187,18 @@ class DTH111:
                 print("无法获取数据库锁，跳过LED状态记录")
                 return
             try:
-                self.db.create_led_status(led_status.to_dict())
-                print(f"记录LED状态变化: {led_status.to_dict()}")
+                result = self.db.create_led_status(led_status.to_dict())
+                print(f"LED状态记录结果: {result}")
+                self.db.update_energy_consumption(led_status)
+                print(f"记录LED状态变化和能源消耗: {led_status.to_dict()}")
+            except Exception as e:
+                print(f"记录LED状态时发生错误: {e}")
             finally:
                 self.db_lock.release()
+        else:
+            print("这是第一次LED状态变化，不记录持续时间")
         self.last_led_change_time = timestamp
+        self.led_status = new_status
 
     def get_led_usage_stats(self):
         if not self.db_lock.acquire(timeout=5):

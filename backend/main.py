@@ -184,6 +184,11 @@ def get_led_history():
     print(f"LED history: {[status.to_dict() for status in history]}")  # 添加这行日志
     return jsonify([status.to_dict() for status in history])
 
+@app.route('/data/energy_stats', methods=['GET'])
+def get_energy_stats():
+    stats = db.get_energy_stats()
+    return jsonify(stats)
+
 def signal_handler(sig, frame):
     print('Terminating...')
     stop_event.set()
@@ -218,7 +223,7 @@ if __name__ == '__main__':
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        executor.submit(video_frames_thread)
+        # executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:
