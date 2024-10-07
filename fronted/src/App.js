@@ -12,9 +12,9 @@ function App() {
     <Router>
       <div className="App">
         <nav className="navbar">
-          <Link to="/" className="nav-item">主页</Link>
-          <Link to="/realtime" className="nav-item">实时图表</Link>
-          <Link to="/led-stats" className="nav-item">LED 统计</Link>
+          <Link to="/" className="nav-item">Home</Link>
+          <Link to="/realtime" className="nav-item">Real-time Chart</Link>
+          <Link to="/led-stats" className="nav-item">LED Statistics</Link>
         </nav>
 
         <Routes>

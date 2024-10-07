@@ -20,7 +20,6 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}},supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-
 data_queue = Queue()
 stop_event = Event()
 lock = Lock()
@@ -35,7 +34,7 @@ video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
 
 def load_sensor_data():
-    # 传感器数据线程
+    # Sensor data thread
     print("Starting sensor data thread")
     while not stop_event.is_set():
         dth111.read_sensor_data()
@@ -50,7 +49,7 @@ def database_thread():
                 while True:
                     data_point = data_queue.get_nowait()
                     if isinstance(data_point, dict):
-                        # 移除不在 SensorData 中定义的字段
+                        # Remove fields not defined in SensorData
                         data_point = {k: v for k, v in data_point.items() if k in SensorData.__annotations__}
                         data_points.append(SensorData(**data_point))
                     elif isinstance(data_point, SensorData):
@@ -68,7 +67,7 @@ def database_thread():
                 timestamp = datetime.now()
 
                 if not lock.acquire(timeout=5):
-                    print("无法获取锁，跳过本次数据处理")
+                    print("Unable to acquire lock, skipping this data processing")
                     continue
 
                 try:
@@ -103,7 +102,7 @@ def database_thread():
             traceback.print_exc()
 
 def video_frames_thread():
-    # 视频流处理线程
+    # Video stream processing thread
     print("Starting video frames thread")
     while not stop_event.is_set():
         try:
@@ -112,13 +111,8 @@ def video_frames_thread():
             print(f"Error in video frames thread: {e}")
             break
 
-# 开启YOLO检测
+# Start YOLO detection
 video_detection.start_detection()
-
-# @app.route('/data', methods=['GET'])
-# def get_data():
-#     # 返回传感器数据
-#     return jsonify(dth111.get_data())
 
 @app.route('/data/ac_state', methods=['GET'])
 def get_current_data():
@@ -175,13 +169,13 @@ def get_led_status():
 @app.route('/data/led_stats', methods=['GET'])
 def get_led_stats():
     stats = dth111.get_led_usage_stats()
-    print(f"LED stats: {stats}")  # 添加这行日志
+    print(f"LED stats: {stats}")  # Add this log
     return jsonify(stats)
 
 @app.route('/data/led_history', methods=['GET'])
 def get_led_history():
     history = db.get_led_status_history()
-    print(f"LED history: {[status.to_dict() for status in history]}")  # 添加这行日志
+    print(f"LED history: {[status.to_dict() for status in history]}")  # Add this log
     return jsonify([status.to_dict() for status in history])
 
 @app.route('/data/energy_stats', methods=['GET'])
@@ -198,8 +192,6 @@ def signal_handler(sig, frame):
     dth111.close()
     sys.exit(0)
 
-
-
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
@@ -207,31 +199,29 @@ def initialize_serial():
     max_attempts = 5
     for attempt in range(max_attempts):
         if dth111.init_serial():
-            print("串口初始化成功")
+            print("Serial initialization successful")
             return True
-        print(f"串口初始化失败，尝试 {attempt + 1}/{max_attempts}")
+        print(f"Serial initialization failed, attempt {attempt + 1}/{max_attempts}")
         time.sleep(2)
     return False
-
 
 if __name__ == '__main__':
     try:
         if not initialize_serial():
-            print("无法初始化串口，程序退出")
+            print("Unable to initialize serial, program exiting")
             sys.exit(1)
 
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        # executor.submit(video_frames_thread)
+        executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:
-        print(f"程序运行时发生错误: {e}")
+        print(f"Error occurred during program execution: {e}")
     finally:
         stop_event.set()
         dth111.close()
         if "executor" in globals():
             executor.shutdown(wait=True)
-
-
+        video_detection.stop_detection()

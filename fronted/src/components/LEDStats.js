@@ -19,7 +19,7 @@ const LEDStats = () => {
         const energyResponse = await axios.get('http://127.0.0.1:5000/data/energy_stats');
         setEnergyStats(energyResponse.data);
       } catch (error) {
-        console.error('获取LED数据时出错:', error);
+        console.error('Error fetching LED data:', error);
       }
     };
 
@@ -27,30 +27,30 @@ const LEDStats = () => {
   }, []);
 
   if (!stats || !energyStats) {
-    return <div>正在加载LED统计信息...</div>;
+    return <div>Loading LED statistics...</div>;
   }
 
   return (
     <div>
-      <h2>LED使用统计</h2>
-      <p>总使用时间: {stats.total_on_time !== undefined ? stats.total_on_time.toFixed(2) : 'N/A'} 秒</p>
-      <p>开启次数: {stats.on_count !== undefined ? stats.on_count : 'N/A'} 次</p>
+      <h2>LED Usage Statistics</h2>
+      <p>Total usage time: {stats.total_on_time !== undefined ? stats.total_on_time.toFixed(2) : 'N/A'} seconds</p>
+      <p>Number of activations: {stats.on_count !== undefined ? stats.on_count : 'N/A'} times</p>
       
-      <h3>能源消耗统计</h3>
-      <p>总能耗: {energyStats.total_energy.toFixed(4)} kWh</p>
-      <p>总成本: {energyStats.total_cost.toFixed(2)} 元</p>
+      <h3>Energy Consumption Statistics</h3>
+      <p>Total energy consumption: {energyStats.total_energy.toFixed(4)} kWh</p>
+      <p>Total cost: {energyStats.total_cost.toFixed(2)} yuan</p>
       
-      <h3>最近状态历史</h3>
+      <h3>Recent Status History</h3>
       <ul>
         {history.map((item, index) => (
           <li key={index}>
-            {item.timestamp} - 状态: {item.status}, 
-            持续时间: {item.duration !== undefined ? item.duration.toFixed(2) : 'N/A'}秒
+            {item.timestamp} - Status: {item.status}, 
+            Duration: {item.duration !== undefined ? item.duration.toFixed(2) : 'N/A'} seconds
           </li>
         ))}
       </ul>
       
-      <Link to="/">返回主页</Link>
+      <Link to="/">Return to Home</Link>
     </div>
   );
 };

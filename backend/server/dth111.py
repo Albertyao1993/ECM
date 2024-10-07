@@ -1,4 +1,4 @@
-# DHT111. py load the data from the sensor and send it to the client.
+# DHT111.py load the data from the sensor and send it to the client.
 
 import threading
 import time
@@ -6,7 +6,6 @@ from datetime import datetime, timezone, timedelta
 import platform
 import serial
 from threading import Lock
-# from Database.sensor_data import SensorData
 from Database.sensor_data import SensorData
 from Database.led_status import LEDStatus
 
@@ -15,7 +14,7 @@ class DTH111:
         self.data_queue = data_queue
         self.lock = threading.RLock()
         self.db = db
-        self.db_lock = threading.RLock()  # 新增一个专门用于数据库操作的锁
+        self.db_lock = threading.RLock()  # Add a lock specifically for database operations
         self.latest_data = None
         self.ser = None
         self.led_status = "OFF"
@@ -32,12 +31,12 @@ class DTH111:
         elif os_type == "Linux":
             return "Linux"
         else:
-            raise Exception(f"不支持的操作系统: {os_type}")
+            raise Exception(f"Unsupported operating system: {os_type}")
 
     def init_serial(self):
         with self.lock:
             if self.ser and self.ser.is_open:
-                print("串口已经打开，无需重新初始化")
+                print("Serial port is already open, no need to reinitialize")
                 return True
 
             if self.ser:
@@ -53,53 +52,53 @@ class DTH111:
 
             try:
                 self.ser = serial.Serial(port, baud_rate, timeout=1)
-                print(f"成功连接到端口: {port}, 波特率: {baud_rate}")
+                print(f"Successfully connected to port: {port}, baud rate: {baud_rate}")
                 return True
             except serial.SerialException as e:
-                print(f"尝试连接到 {port} 失败: {e}")
+                print(f"Failed to connect to {port}: {e}")
                 if "Access is denied" in str(e):
-                    print("这可能是权限问题。请确保您有权限访问该串口。")
+                    print("This might be a permission issue. Make sure you have the right to access the serial port.")
                 elif "Port is already open" in str(e):
-                    print("该串口已被其他程序占用。请关闭其他可能使用该串口的程序。")
+                    print("The port is already in use by another program. Please close other programs that might be using this port.")
                 elif "No such file or directory" in str(e):
-                    print("找不到指定的串口。请确保设备已正确连接。")
+                    print("The specified port was not found. Make sure the device is properly connected.")
                 return False
 
     def read_sensor_data(self):
         while True:
             try:
                 if not self.ser or not self.ser.is_open:
-                    print("串口未连接，尝试重新初始化...")
+                    print("Serial port not connected, attempting to reinitialize...")
                     if not self.init_serial():
-                        print("串口初始化失败，等待 5 秒后重试...")
+                        print("Serial initialization failed, retrying in 5 seconds...")
                         time.sleep(5)
                         continue
 
                 line = self.ser.readline().decode().strip(",")
-                print(f"原始数据: {line}")
+                print(f"Raw data: {line}")
 
                 data = self.parse_sensor_data(line)
                 if data:
-                    print(f"解析后的数据: {data}")
+                    print(f"Parsed data: {data}")
                     self.data_queue.put(data)
                     self.latest_data = data
-                    self.led_status = data.light_status  # 使用点号访问属性
-                    self.ac_status = data.ac_status  # 使用点号访问属性
+                    self.led_status = data.light_status
+                    self.ac_status = data.ac_status
 
                 time.sleep(2)
             except serial.SerialException as e:
-                print(f"串口读取错误: {e}")
-                self.ser = None  # 标记串口为未连接状态
-                time.sleep(5)  # 等待一段时间后重试
+                print(f"Serial read error: {e}")
+                self.ser = None  # Mark serial as disconnected
+                time.sleep(5)  # Wait before retrying
             except Exception as e:
-                print(f"读取传感器数据时出错: {e}")
+                print(f"Error reading sensor data: {e}")
                 import traceback
                 traceback.print_exc()
                 time.sleep(2)
 
     def parse_sensor_data(self, line):
         try:
-            # 数据格式为 "温度,湿度,光照,声音,LED状态"
+            # Data format: "temperature,humidity,light,sound,LED_state"
             temp, hum, light, sound, led_state = map(float, line.split(','))
             return SensorData(
                 temperature=temp,
@@ -111,12 +110,12 @@ class DTH111:
                 ac_status=self.ac_status
             )
         except ValueError as e:
-            print(f"数据解析错误: {e}")
+            print(f"Data parsing error: {e}")
             return None
 
     def get_latest_data(self):
         if self.latest_data is None:
-            # 如果没有最新数据，返回一个默认值
+            # If no latest data, return default values
             return {
                 "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
                 "temperature": None,
@@ -134,48 +133,48 @@ class DTH111:
             if self.ser and self.ser.is_open:
                 try:
                     with self.lock:
-                        print(f"[{threading.current_thread().name}] 获得锁，准备发送命令")
+                        print(f"[{threading.current_thread().name}] Acquired lock, preparing to send command")
                         self.ser.write(f"{command}\n".encode())
-                    print(f"[{threading.current_thread().name}] 命令已发送: {command}")
+                    print(f"[{threading.current_thread().name}] Command sent: {command}")
                     return True
                 except serial.SerialException as e:
-                    print(f"发送命令时出错 (尝试 {attempt + 1}/{max_attempts}): {e}")
-                    self.ser = None  # 标记串口为未连接状态
+                    print(f"Error sending command (attempt {attempt + 1}/{max_attempts}): {e}")
+                    self.ser = None  # Mark serial as disconnected
             else:
-                print(f"串口未连接，尝试重新初始化 (尝试 {attempt + 1}/{max_attempts})...")
+                print(f"Serial not connected, attempting to reinitialize (attempt {attempt + 1}/{max_attempts})...")
                 if self.init_serial():
-                    continue  # 如果成功初始化，尝试再次发送命令
+                    continue  # If initialization successful, try sending command again
             
-            time.sleep(1)  # 在重试之前等待一秒
+            time.sleep(1)  # Wait before retrying
         
-        print(f"无法发送命令 '{command}'，达到最大尝试次数")
+        print(f"Unable to send command '{command}', maximum attempts reached")
         return False
 
     def control_led(self, light_value):
         current_time = datetime.now()
         if not self.lock.acquire(timeout=5):
-            print("无法获取锁，跳过LED控制")
+            print("Unable to acquire lock, skipping LED control")
             return
 
         try:
-            new_status = self.led_status  # 默认保持当前状态
+            new_status = self.led_status  # Default to current status
             if light_value < 100 and self.led_status == "OFF":
                 if self.send_command("LED_ON"):
                     new_status = "ON"
-                    print(f"LED 开启，当前光照值: {light_value}")
+                    print(f"LED turned ON, current light value: {light_value}")
             elif light_value >= 100 and self.led_status == "ON":
                 if self.send_command("LED_OFF"):
                     new_status = "OFF"
-                    print(f"LED 关闭，当前光照值: {light_value}")
+                    print(f"LED turned OFF, current light value: {light_value}")
             
-            # 无论状态是否改变，都调用record_led_status_change
+            # Call record_led_status_change regardless of status change
             self.record_led_status_change(new_status, current_time)
-            print(f"LED 状态更新: {self.led_status} -> {new_status}")
+            print(f"LED status update: {self.led_status} -> {new_status}")
         finally:
             self.lock.release()
 
     def record_led_status_change(self, new_status, timestamp):
-        print(f"记录LED状态变化: {self.led_status} -> {new_status}")
+        print(f"Recording LED status change: {self.led_status} -> {new_status}")
         if self.last_led_change_time:
             duration = (timestamp - self.last_led_change_time).total_seconds()
             led_status = LEDStatus(
@@ -184,29 +183,29 @@ class DTH111:
                 duration=duration
             )
             if not self.db_lock.acquire(timeout=5):
-                print("无法获取数据库锁，跳过LED状态记录")
+                print("Unable to acquire database lock, skipping LED status recording")
                 return
             try:
                 result = self.db.create_led_status(led_status.to_dict())
-                print(f"LED状态记录结果: {result}")
+                print(f"LED status record result: {result}")
                 self.db.update_energy_consumption(led_status)
-                print(f"记录LED状态变化和能源消耗: {led_status.to_dict()}")
+                print(f"Recorded LED status change and energy consumption: {led_status.to_dict()}")
             except Exception as e:
-                print(f"记录LED状态时发生错误: {e}")
+                print(f"Error recording LED status: {e}")
             finally:
                 self.db_lock.release()
         else:
-            print("这是第一次LED状态变化，不记录持续时间")
+            print("This is the first LED status change, not recording duration")
         self.last_led_change_time = timestamp
         self.led_status = new_status
 
     def get_led_usage_stats(self):
         if not self.db_lock.acquire(timeout=5):
-            print("无法获取数据库锁，无法获取LED使用统计")
+            print("Unable to acquire database lock, cannot get LED usage statistics")
             return None
         try:
             stats = self.db.get_led_stats()
-            print(f"获取LED使用统计: {stats}")
+            print(f"Retrieved LED usage statistics: {stats}")
             return stats
         finally:
             self.db_lock.release()
@@ -215,6 +214,6 @@ class DTH111:
         with self.lock:
             if self.ser and self.ser.is_open:
                 self.ser.close()
-                print("串口已关闭")
+                print("Serial port closed")
     def __del__(self):
         self.close()

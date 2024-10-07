@@ -68,20 +68,20 @@ const RealTimeChart = () => {
 
   return (
     <div>
-      <h2>实时温度、湿度和光照数据</h2>
+      <h2>Real-time Temperature, Humidity, and Light Data</h2>
       <div style={{ marginBottom: '20px' }}>
-        <h3>温度</h3>
+        <h3>Temperature</h3>
         <Line options={options} data={createChartData('Temperature', data, 'rgb(255, 99, 132)')} />
       </div>
       <div style={{ marginBottom: '20px' }}>
-        <h3>湿度</h3>
+        <h3>Humidity</h3>
         <Line options={options} data={createChartData('Humidity', data, 'rgb(53, 162, 235)')} />
       </div>
       <div>
-        <h3>光照</h3>
+        <h3>Light</h3>
         <Line options={options} data={createChartData('Light', data, 'rgb(75, 192, 192)')} />
       </div>
-      <Link to="/">返回主页</Link>
+      <Link to="/">Return to Home</Link>
     </div>
   );
 };

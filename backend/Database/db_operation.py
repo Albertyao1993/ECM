@@ -11,26 +11,26 @@ class Database:
     def __init__(self, uri, db_name, collection_name):
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
-        # 使用 CodecOptions 来确保时间戳被视为本地时间
+        # Use CodecOptions to ensure timestamps are treated as local time
         self.collection = self.db.get_collection(
             collection_name,
             codec_options=CodecOptions(tz_aware=False)
         )
         
-        # 创建 LED 状态集合
+        # Create LED status collection
         self.led_collection = self.db.get_collection(
             'led_status',
             codec_options=CodecOptions(tz_aware=False)
         )
 
-        # 确保 led_status 集合存在
+        # Ensure led_status collection exists
         if 'led_status' not in self.db.list_collection_names():
             self.db.create_collection('led_status')
-            print("创建了 led_status 集合")
+            print("Created led_status collection")
         else:
-            print("led_status 集合已存在")
+            print("led_status collection already exists")
 
-        # 创建能源消耗集合
+        # Create energy consumption collection
         self.energy_collection = self.db.get_collection(
             'energy_consumption',
             codec_options=CodecOptions(tz_aware=False)
@@ -38,23 +38,23 @@ class Database:
         self.energy_calculator = EnergyCalculator()
 
     def create(self, data):
-        """插入一条新记录"""
-        # 确保时间戳是 naive datetime（无时区信息）
+        """Insert a new record"""
+        # Ensure timestamp is naive datetime (no timezone info)
         if 'timestamp' in data and isinstance(data['timestamp'], datetime):
             data['timestamp'] = data['timestamp'].replace(tzinfo=None)
         result = self.collection.insert_one(data)
         return str(result.inserted_id)
 
     def read(self, query):
-        """根据查询条件读取记录"""
+        """Read records based on query"""
         return list(self.collection.find(query))
 
     def read_by_id(self, record_id):
-        """根据ID读取记录"""
+        """Read a record by ID"""
         return self.collection.find_one({"_id": ObjectId(record_id)})
 
     def update(self, record_id, update_data):
-        """根据ID更新记录"""
+        """Update a record by ID"""
         result = self.collection.update_one(
             {"_id": ObjectId(record_id)},
             {"$set": update_data}
@@ -62,28 +62,27 @@ class Database:
         return result.modified_count
 
     def delete(self, record_id):
-        """根据ID删除记录"""
+        """Delete a record by ID"""
         result = self.collection.delete_one({"_id": ObjectId(record_id)})
         return result.deleted_count
 
     def delete_many(self, query):
-        """根据查询条件删除多条记录"""
+        """Delete multiple records based on query"""
         result = self.collection.delete_many(query)
         return result.deleted_count
 
     def read_all(self):
-        """读取所有记录"""
-        # return list(self.collection.find())
+        """Read all records"""
         return list(self.collection.find({}, {'_id': False}))
     
     def read_by_time_range(self, start_time, end_time):
-        """根据时间范围读取记录"""
+        """Read records within a time range"""
         query = {"timestamp": {"$gte": start_time, "$lte": end_time}}
-        print(f"Executing query: {query}")  # 添加这行日志
+        print(f"Executing query: {query}")  # Add this log
         records = list(self.collection.find(query, {'_id': False}))
-        print(f"Found {len(records)} records")  # 添加这行日志
+        print(f"Found {len(records)} records")  # Add this log
         
-        # 将 datetime 对象转换为字符串，便于 JSON 序列化
+        # Convert datetime objects to strings for JSON serialization
         for record in records:
             if isinstance(record.get('timestamp'), datetime):
                 record['timestamp'] = record['timestamp'].isoformat()
@@ -91,7 +90,7 @@ class Database:
         return records
 
     def read_latest(self):
-        """读取最新的一条记录"""
+        """Read the latest record"""
         try:
             latest_record = self.collection.find_one({}, sort=[("timestamp", -1)], projection={'_id': False})
             if latest_record and isinstance(latest_record.get('timestamp'), datetime):
@@ -102,17 +101,17 @@ class Database:
             return None
 
     def create_led_status(self, status_data):
-        """在LED状态集合中插入新记录"""
+        """Insert a new record in the LED status collection"""
         try:
             result = self.led_collection.insert_one(status_data)
-            print(f"插入LED状态记录: {status_data}")
+            print(f"Inserted LED status record: {status_data}")
             return str(result.inserted_id)
         except Exception as e:
-            print(f"插入LED状态记录时发生错误: {e}")
+            print(f"Error inserting LED status record: {e}")
             return None
 
     def get_led_stats(self):
-        """获取LED使用统计信息"""
+        """Get LED usage statistics"""
         pipeline = [
             {
                 '$group': {
@@ -132,17 +131,17 @@ class Database:
         return {'total_on_time': 0, 'on_count': 0}
 
     def get_led_status_history(self, limit=10):
-        """获取最近的LED状态历史"""
+        """Get recent LED status history"""
         cursor = self.led_collection.find().sort('timestamp', -1).limit(limit)
         return [LEDStatus.from_dict(doc) for doc in cursor]
 
     def create_energy_consumption(self, energy_data):
-        """在能源消耗集合中插入新记录"""
+        """Insert a new record in the energy consumption collection"""
         result = self.energy_collection.insert_one(energy_data)
         return str(result.inserted_id)
 
     def get_energy_stats(self):
-        """获取能源消耗统计信息"""
+        """Get energy consumption statistics"""
         pipeline = [
             {
                 '$group': {

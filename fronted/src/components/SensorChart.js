@@ -52,7 +52,7 @@ const SensorChart = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 60000); // 每分钟更新一次
+    const interval = setInterval(fetchData, 60000); // Update every minute
     return () => clearInterval(interval);
   }, []);
 
@@ -80,7 +80,7 @@ const SensorChart = () => {
 
     if (isLight) {
       datasets.push({
-        label: '光照阈值',
+        label: 'Light Threshold',
         data: new Array(data.labels.length).fill(100),
         borderColor: 'rgb(255, 0, 0)',
         backgroundColor: 'transparent',
@@ -115,17 +115,17 @@ const SensorChart = () => {
 
   return (
     <div>
-      <h2>温度、湿度和光照历史数据（最近30分钟）</h2>
+      <h2>Temperature, Humidity, and Light Historical Data (Last 30 Minutes)</h2>
       <div style={{ marginBottom: '20px' }}>
-        <h3>温度</h3>
+        <h3>Temperature</h3>
         <Line options={options} data={createChartData('Temperature', data, 'rgb(255, 99, 132)', true)} />
       </div>
       <div style={{ marginBottom: '20px' }}>
-        <h3>湿度</h3>
+        <h3>Humidity</h3>
         <Line options={options} data={createChartData('Humidity', data, 'rgb(53, 162, 235)', true)} />
       </div>
       <div>
-        <h3>光照</h3>
+        <h3>Light</h3>
         <Line options={options} data={createChartData('Light', data, 'rgb(75, 192, 192)', false, true)} />
       </div>
     </div>
