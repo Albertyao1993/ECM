@@ -4,6 +4,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime, timezone
 from bson.codec_options import CodecOptions
+from Database.led_status import LEDStatus
 
 class Database:
     def __init__(self, uri, db_name, collection_name):
@@ -14,6 +15,19 @@ class Database:
             collection_name,
             codec_options=CodecOptions(tz_aware=False)
         )
+        
+        # 创建 LED 状态集合
+        self.led_collection = self.db.get_collection(
+            'led_status',
+            codec_options=CodecOptions(tz_aware=False)
+        )
+
+        # 确保 led_status 集合存在
+        if 'led_status' not in self.db.list_collection_names():
+            self.db.create_collection('led_status')
+            print("创建了 led_status 集合")
+        else:
+            print("led_status 集合已存在")
 
     def create(self, data):
         """插入一条新记录"""
@@ -78,3 +92,33 @@ class Database:
         except Exception as e:
             print(f"Error reading latest record: {e}")
             return None
+
+    def create_led_status(self, status_data):
+        """在LED状态集合中插入新记录"""
+        result = self.led_collection.insert_one(status_data)
+        return str(result.inserted_id)
+
+    def get_led_stats(self):
+        """获取LED使用统计信息"""
+        pipeline = [
+            {
+                '$group': {
+                    '_id': None,
+                    'total_on_time': {'$sum': '$duration'},
+                    'on_count': {'$sum': {'$cond': [{'$eq': ['$status', 'ON']}, 1, 0]}}
+                }
+            }
+        ]
+        result = list(self.led_collection.aggregate(pipeline))
+        if result:
+            stats = result[0]
+            return {
+                'total_on_time': stats.get('total_on_time', 0),
+                'on_count': stats.get('on_count', 0)
+            }
+        return {'total_on_time': 0, 'on_count': 0}
+
+    def get_led_status_history(self, limit=10):
+        """获取最近的LED状态历史"""
+        cursor = self.led_collection.find().sort('timestamp', -1).limit(limit)
+        return [LEDStatus.from_dict(doc) for doc in cursor]

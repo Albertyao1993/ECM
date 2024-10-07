@@ -14,6 +14,7 @@ from Database.sensor_data import SensorData
 from open_weather.weather import OpenWeather
 import time
 from datetime import datetime, timedelta
+import queue
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}},supports_credentials=True)
@@ -28,7 +29,7 @@ executor = ThreadPoolExecutor(max_workers=3)
 
 # Initialize the database
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
-dth111 = DTH111(data_queue=data_queue, lock=lock)
+dth111 = DTH111(data_queue=data_queue, lock=lock, db=db)
 open_weather = OpenWeather('fa3005c77c9d4631ef729307d175661f', 'Darmstadt')
 video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
@@ -44,39 +45,62 @@ def database_thread():
     while not stop_event.is_set():
         try:
             time.sleep(60)
-            if not data_queue.empty():
-                data_points = []
-                while not data_queue.empty():
-                    data_points.append(data_queue.get())
+            data_points = []
+            try:
+                while True:
+                    data_point = data_queue.get_nowait()
+                    if isinstance(data_point, dict):
+                        # 移除不在 SensorData 中定义的字段
+                        data_point = {k: v for k, v in data_point.items() if k in SensorData.__annotations__}
+                        data_points.append(SensorData(**data_point))
+                    elif isinstance(data_point, SensorData):
+                        data_points.append(data_point)
+                    else:
+                        print(f"Unexpected data type in queue: {type(data_point)}")
+            except queue.Empty:
+                pass
 
-                if data_points:
-                    avg_temperature = sum(dp.temperature for dp in data_points) / len(data_points)
-                    avg_humidity = sum(dp.humidity for dp in data_points) / len(data_points)
-                    avg_light = sum(dp.light for dp in data_points) / len(data_points)
-                    timestamp = datetime.now()
+            if data_points:
+                print(f"Processing {len(data_points)} data points")
+                avg_temperature = sum(dp.temperature for dp in data_points) / len(data_points)
+                avg_humidity = sum(dp.humidity for dp in data_points) / len(data_points)
+                avg_light = sum(dp.light for dp in data_points) / len(data_points)
+                timestamp = datetime.now()
 
-                    with lock:
-                        dth111.control_led(avg_light)
+                if not lock.acquire(timeout=5):
+                    print("无法获取锁，跳过本次数据处理")
+                    continue
 
-                    avg_data_point = SensorData(
-                        timestamp=timestamp,
-                        temperature=avg_temperature,
-                        humidity=avg_humidity,
-                        light=avg_light,
-                        light_status=dth111.led_status,
-                        ac_status=dth111.ac_status
-                    )
+                try:
+                    dth111.control_led(avg_light)
+                finally:
+                    lock.release()
 
-                    weather_data = open_weather.get_weather_data()
-                    avg_data_point.ow_temperature = weather_data['ow_temperature']
-                    avg_data_point.ow_humidity = weather_data['ow_humidity']
-                    avg_data_point.ow_weather_desc = weather_data['ow_weather_desc']
+                avg_data_point = SensorData(
+                    timestamp=timestamp,
+                    temperature=avg_temperature,
+                    humidity=avg_humidity,
+                    light=avg_light,
+                    light_status=dth111.led_status,
+                    ac_status=dth111.ac_status,
+                    sound_state=data_points[-1].sound_state,
+                    person_count=data_points[-1].person_count
+                )
 
-                    print(f"Inserting data into database: {avg_data_point.to_dict()}")
-                    db.create(avg_data_point.to_dict())
-                    print("Data inserted successfully")
+                weather_data = open_weather.get_weather_data()
+                avg_data_point.ow_temperature = weather_data['ow_temperature']
+                avg_data_point.ow_humidity = weather_data['ow_humidity']
+                avg_data_point.ow_weather_desc = weather_data['ow_weather_desc']
+
+                print(f"Inserting data into database: {avg_data_point.to_dict()}")
+                db.create(avg_data_point.to_dict())
+                print("Data inserted successfully")
+            else:
+                print("No data points to process")
         except Exception as e:
             print(f"Error in database thread: {e}")
+            import traceback
+            traceback.print_exc()
 
 def video_frames_thread():
     # 视频流处理线程
@@ -113,14 +137,27 @@ def get_current_data():
 @app.route('/data/realtime', methods=['GET'])
 def get_realtime_data():
     try:
-        data = dth111.get_latest_data()
+        data = dth111.latest_data
         print(f"Realtime data: {data}")
-        if data['temperature'] is None:
-            return jsonify({'error': 'No sensor data available'}), 404
-        return jsonify(data)
+        if data:
+            return jsonify({
+                'temperature': data.temperature,
+                'humidity': data.humidity,
+                'light': data.light,
+                'timestamp': data.timestamp.isoformat(),
+                'light_status': data.light_status,
+                'ac_status': data.ac_status,
+                'sound_state': data.sound_state,
+                'ow_temperature': data.ow_temperature,
+                'ow_humidity': data.ow_humidity,
+                'ow_weather_desc': data.ow_weather_desc,
+                'person_count': data.person_count
+            })
+        else:
+            return jsonify({'error': 'No data available'}), 404
     except Exception as e:
         print(f"Error in get_realtime_data: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
@@ -138,7 +175,14 @@ def get_led_status():
 @app.route('/data/led_stats', methods=['GET'])
 def get_led_stats():
     stats = dth111.get_led_usage_stats()
+    print(f"LED stats: {stats}")  # 添加这行日志
     return jsonify(stats)
+
+@app.route('/data/led_history', methods=['GET'])
+def get_led_history():
+    history = db.get_led_status_history()
+    print(f"LED history: {[status.to_dict() for status in history]}")  # 添加这行日志
+    return jsonify([status.to_dict() for status in history])
 
 def signal_handler(sig, frame):
     print('Terminating...')
@@ -174,7 +218,7 @@ if __name__ == '__main__':
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        # executor.submit(video_frames_thread)
+        executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:

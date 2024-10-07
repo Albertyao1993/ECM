@@ -4,30 +4,44 @@ import { Link } from 'react-router-dom';
 
 const LEDStats = () => {
   const [stats, setStats] = useState(null);
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:5000/data/led_stats');
-        setStats(response.data);
+        const statsResponse = await axios.get('http://127.0.0.1:5000/data/led_stats');
+        setStats(statsResponse.data);
+
+        const historyResponse = await axios.get('http://127.0.0.1:5000/data/led_history');
+        setHistory(historyResponse.data);
       } catch (error) {
-        console.error('Error fetching LED stats:', error);
+        console.error('获取LED数据时出错:', error);
       }
     };
 
-    fetchStats();
+    fetchData();
   }, []);
 
   if (!stats) {
-    return <div>Loading LED stats...</div>;
+    return <div>正在加载LED统计信息...</div>;
   }
 
   return (
     <div>
-      <h2>LED Usage Statistics</h2>
-      <p>Total Usage Time: {stats.total_usage}</p>
-      <p>Average Usage Time: {stats.average_usage}</p>
-      <p>Number of Times Used: {stats.usage_count}</p>
+      <h2>LED使用统计</h2>
+      <p>总使用时间: {stats.total_on_time !== undefined ? stats.total_on_time.toFixed(2) : 'N/A'} 秒</p>
+      <p>开启次数: {stats.on_count !== undefined ? stats.on_count : 'N/A'} 次</p>
+      
+      <h3>最近状态历史</h3>
+      <ul>
+        {history.map((item, index) => (
+          <li key={index}>
+            {new Date(item.timestamp).toLocaleString()} - 状态: {item.status}, 
+            持续时间: {item.duration !== undefined ? item.duration.toFixed(2) : 'N/A'}秒
+          </li>
+        ))}
+      </ul>
+      
       <Link to="/">返回主页</Link>
     </div>
   );

@@ -8,17 +8,21 @@ import serial
 from threading import Lock
 # from Database.sensor_data import SensorData
 from Database.sensor_data import SensorData
+from Database.led_status import LEDStatus
 
 class DTH111:
-    def __init__(self, data_queue, lock):
+    def __init__(self, data_queue, lock, db):
         self.data_queue = data_queue
-        self.lock = lock
+        self.lock = threading.RLock()
+        self.db = db
+        self.db_lock = threading.RLock()  # 新增一个专门用于数据库操作的锁
         self.latest_data = None
         self.ser = None
         self.led_status = "OFF"
         self.ac_status = "OFF"
         self.led_on_time = None
         self.led_usage_times = []
+        self.last_led_change_time = None
         self.init_serial()
 
     def detect_os(self):
@@ -63,50 +67,52 @@ class DTH111:
 
     def read_sensor_data(self):
         while True:
-            if not self.ser or not self.ser.is_open:
-                print("串口未连接，尝试重新初始化...")
-                if not self.init_serial():
-                    print("串口初始化失败，等待 5 秒后重试...")
-                    time.sleep(5)
-                    continue
-
             try:
-                with self.lock:
-                    line = self.ser.readline().decode('utf-8').strip(",")
-                if line:
-                    parts = line.split(',')
-                    if len(parts) != 5:
-                        print(f"无效的数据格式: {line}")
+                if not self.ser or not self.ser.is_open:
+                    print("串口未连接，尝试重新初始化...")
+                    if not self.init_serial():
+                        print("串口初始化失败，等待 5 秒后重试...")
+                        time.sleep(5)
                         continue
 
-                    temperature, humidity, light, sound_state, led_state = parts
+                line = self.ser.readline().decode().strip(",")
+                print(f"原始数据: {line}")
 
-                    timestamp = datetime.now(timezone.utc).astimezone()
+                data = self.parse_sensor_data(line)
+                if data:
+                    print(f"解析后的数据: {data}")
+                    self.data_queue.put(data)
+                    self.latest_data = data
+                    self.led_status = data.light_status  # 使用点号访问属性
+                    self.ac_status = data.ac_status  # 使用点号访问属性
 
-                    new_data_point = SensorData(
-                        timestamp=timestamp,
-                        temperature=float(temperature),
-                        humidity=float(humidity),
-                        light=float(light),
-                        sound_state=int(sound_state),
-                        light_status=self.led_status
-                    )
-
-                    with self.lock:
-                        self.data_queue.put(new_data_point)
-                        self.latest_data = new_data_point.to_dict()
-                    
-                    print(f"新数据点: {new_data_point.to_dict()}")
-
-                    # 控制 LED
-                    self.control_led(float(light))
+                time.sleep(2)
             except serial.SerialException as e:
-                print(f"串口通信错误: {e}")
-                self.ser = None
+                print(f"串口读取错误: {e}")
+                self.ser = None  # 标记串口为未连接状态
+                time.sleep(5)  # 等待一段时间后重试
             except Exception as e:
                 print(f"读取传感器数据时出错: {e}")
+                import traceback
+                traceback.print_exc()
+                time.sleep(2)
 
-            time.sleep(2)
+    def parse_sensor_data(self, line):
+        try:
+            # 数据格式为 "温度,湿度,光照,声音,LED状态"
+            temp, hum, light, sound, led_state = map(float, line.split(','))
+            return SensorData(
+                temperature=temp,
+                humidity=hum,
+                light=light,
+                sound_state=int(sound),
+                timestamp=datetime.now(),
+                light_status="ON" if int(led_state) == 1 else "OFF",
+                ac_status=self.ac_status
+            )
+        except ValueError as e:
+            print(f"数据解析错误: {e}")
+            return None
 
     def get_latest_data(self):
         if self.latest_data is None:
@@ -146,26 +152,63 @@ class DTH111:
         return False
 
     def control_led(self, light_value):
-        if light_value < 100 and self.led_status == "OFF":
-            self.send_command("LED_ON")
-            self.led_status = "ON"
-            self.led_on_time = datetime.now()
-        elif light_value >= 100 and self.led_status == "ON":
-            self.send_command("LED_OFF")
-            self.led_status = "OFF"
-            if self.led_on_time:
-                usage_time = datetime.now() - self.led_on_time
-                self.led_usage_times.append(usage_time)
-                self.led_on_time = None
+        current_time = datetime.now()
+        if not self.lock.acquire(timeout=5):
+            print("无法获取锁，跳过LED控制")
+            return
+
+        try:
+            if light_value < 100 and self.led_status == "OFF":
+                if self.send_command("LED_ON"):
+                    new_status = "ON"
+                    self.led_status = new_status
+                    self.led_on_time = current_time
+                    print(f"LED 开启，当前光照值: {light_value}")
+            elif light_value >= 100 and self.led_status == "ON":
+                if self.send_command("LED_OFF"):
+                    new_status = "OFF"
+                    self.led_status = new_status
+                    if self.led_on_time:
+                        usage_time = current_time - self.led_on_time
+                        self.led_usage_times.append(usage_time)
+                        self.led_on_time = None
+                    print(f"LED 关闭，当前光照值: {light_value}")
+            else:
+                print(f"LED 状态保持不变，当前状态: {self.led_status}，光照值: {light_value}")
+                return  # 如果状态没有改变，直接返回，不记录状态变化
+        finally:
+            self.lock.release()
+        
+        self.record_led_status_change(self.led_status, current_time)
+
+    def record_led_status_change(self, new_status, timestamp):
+        if self.last_led_change_time:
+            duration = (timestamp - self.last_led_change_time).total_seconds()
+            led_status = LEDStatus(
+                timestamp=self.last_led_change_time,
+                status=self.led_status,
+                duration=duration
+            )
+            if not self.db_lock.acquire(timeout=5):
+                print("无法获取数据库锁，跳过LED状态记录")
+                return
+            try:
+                self.db.create_led_status(led_status.to_dict())
+                print(f"记录LED状态变化: {led_status.to_dict()}")
+            finally:
+                self.db_lock.release()
+        self.last_led_change_time = timestamp
 
     def get_led_usage_stats(self):
-        total_usage = sum(self.led_usage_times, timedelta())
-        avg_usage = total_usage / len(self.led_usage_times) if self.led_usage_times else timedelta()
-        return {
-            "total_usage": str(total_usage),
-            "average_usage": str(avg_usage),
-            "usage_count": len(self.led_usage_times)
-        }
+        if not self.db_lock.acquire(timeout=5):
+            print("无法获取数据库锁，无法获取LED使用统计")
+            return None
+        try:
+            stats = self.db.get_led_stats()
+            print(f"获取LED使用统计: {stats}")
+            return stats
+        finally:
+            self.db_lock.release()
 
     def close(self):
         with self.lock:
