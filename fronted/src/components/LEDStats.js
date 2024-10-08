@@ -69,14 +69,16 @@ const LEDStats = () => {
       } catch (error) {
         console.error('Error polling analysis result:', error);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 5000); // Poll every 5 seconds instead of 2
 
-    // Set timeout to prevent infinite polling
+    // Increase timeout to 5 minutes (300000 ms)
     setTimeout(() => {
       clearInterval(pollInterval);
       setIsAnalysisLoading(false);
-      setLedAnalysis({ error: 'Analysis timeout, please try again later' });
-    }, 60000); // Timeout after 60 seconds
+      setLedAnalysis({ 
+        error: 'Analysis is taking longer than expected. Please check back later or try refreshing the page.' 
+      });
+    }, 300000);
   };
 
   const getEnergyInfo = (info) => {
@@ -109,25 +111,34 @@ const LEDStats = () => {
       
       <h3>AI Analysis</h3>
       {isAnalysisLoading ? (
-        <p>Generating analysis...</p>
+        <p>Generating analysis... This may take a few minutes.</p>
       ) : ledAnalysis ? (
         <>
-          <p>LED Action: {ledAnalysis.led_action || 'Unknown'}</p>
-          <p>Energy Consumption: {energyInfo.consumption}</p>
-          <p>Cost: {energyInfo.cost}</p>
-          <div>
-            <label htmlFor="analysisTextarea">Analysis Result:</label>
-            <textarea
-              id="analysisTextarea"
-              value={ledAnalysis.analysis || ''}
-              readOnly
-              rows={5}
-              style={{ width: '100%', marginTop: '10px' }}
-            />
-          </div>
+          {ledAnalysis.error ? (
+            <div>
+              <p>{ledAnalysis.error}</p>
+              <button onClick={() => fetchLEDAnalysis()}>Retry Analysis</button>
+            </div>
+          ) : (
+            <>
+              <p>LED Action: {ledAnalysis.led_action || 'Unknown'}</p>
+              <p>Energy Consumption: {energyInfo.consumption}</p>
+              <p>Cost: {energyInfo.cost}</p>
+              <div>
+                <label htmlFor="analysisTextarea">Analysis Result:</label>
+                <textarea
+                  id="analysisTextarea"
+                  value={ledAnalysis.analysis || ''}
+                  readOnly
+                  rows={5}
+                  style={{ width: '100%', marginTop: '10px' }}
+                />
+              </div>
+            </>
+          )}
         </>
       ) : (
-        <p>No analysis data available</p>
+        <p>No analysis data available. <button onClick={() => fetchLEDAnalysis()}>Start Analysis</button></p>
       )}
     </div>
   );
