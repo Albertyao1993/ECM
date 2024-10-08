@@ -173,6 +173,28 @@ class DTH111:
         finally:
             self.lock.release()
 
+    def control_led_from_agent(self, action):
+        if not self.lock.acquire(timeout=5):
+            print("无法获取锁，跳过 LED 控制")
+            return False
+
+        try:
+            if action == "Turn on LED light" and self.led_status == "OFF":
+                if self.send_command("LED_ON"):
+                    self.record_led_status_change("ON", datetime.now())
+                    print("LED 已打开")
+                    return True
+            elif action == "Turn off LED light" and self.led_status == "ON":
+                if self.send_command("LED_OFF"):
+                    self.record_led_status_change("OFF", datetime.now())
+                    print("LED 已关闭")
+                    return True
+            else:
+                print(f"LED 状态未改变: {action}")
+                return False
+        finally:
+            self.lock.release()
+
     def record_led_status_change(self, new_status, timestamp):
         print(f"Recording LED status change: {self.led_status} -> {new_status}")
         if self.last_led_change_time:
@@ -198,6 +220,23 @@ class DTH111:
             print("This is the first LED status change, not recording duration")
         self.last_led_change_time = timestamp
         self.led_status = new_status
+
+    def auto_control_led(self, light_value):
+        if not self.lock.acquire(timeout=5):
+            print("无法获取锁，跳过自动 LED 控制")
+            return
+
+        try:
+            if light_value < 100 and self.led_status == "OFF":
+                if self.send_command("LED_ON"):
+                    self.record_led_status_change("ON", datetime.now())
+                    print(f"LED 自动打开，当前光照值: {light_value}")
+            elif light_value >= 100 and self.led_status == "ON":
+                if self.send_command("LED_OFF"):
+                    self.record_led_status_change("OFF", datetime.now())
+                    print(f"LED 自动关闭，当前光照值: {light_value}")
+        finally:
+            self.lock.release()
 
     def get_led_usage_stats(self):
         if not self.db_lock.acquire(timeout=5):

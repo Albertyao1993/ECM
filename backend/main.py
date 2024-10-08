@@ -38,7 +38,7 @@ open_weather = OpenWeather('fa3005c77c9d4631ef729307d175661f', 'Darmstadt')
 video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
 
-led_agent = LEDAgent()
+led_agent = LEDAgent(dth111)
 
 def load_sensor_data():
     # Sensor data thread
@@ -47,7 +47,7 @@ def load_sensor_data():
         dth111.read_sensor_data()
 
 def database_thread():
-    print("Starting database thread")
+    print("启动数据库线程")
     while not stop_event.is_set():
         try:
             time.sleep(60)
@@ -56,31 +56,25 @@ def database_thread():
                 while True:
                     data_point = data_queue.get_nowait()
                     if isinstance(data_point, dict):
-                        # Remove fields not defined in SensorData
+                        # 移除 SensorData 中未定义的字段
                         data_point = {k: v for k, v in data_point.items() if k in SensorData.__annotations__}
                         data_points.append(SensorData(**data_point))
                     elif isinstance(data_point, SensorData):
                         data_points.append(data_point)
                     else:
-                        print(f"Unexpected data type in queue: {type(data_point)}")
+                        print(f"队列中出现意外的数据类型: {type(data_point)}")
             except queue.Empty:
                 pass
 
             if data_points:
-                print(f"Processing {len(data_points)} data points")
+                print(f"处理 {len(data_points)} 个数据点")
                 avg_temperature = sum(dp.temperature for dp in data_points) / len(data_points)
                 avg_humidity = sum(dp.humidity for dp in data_points) / len(data_points)
                 avg_light = sum(dp.light for dp in data_points) / len(data_points)
                 timestamp = datetime.now()
 
-                if not lock.acquire(timeout=5):
-                    print("Unable to acquire lock, skipping this data processing")
-                    continue
-
-                try:
-                    dth111.control_led(avg_light)
-                finally:
-                    lock.release()
+                # 调用新的自动控制方法
+                # dth111.auto_control_led(avg_light)
 
                 avg_data_point = SensorData(
                     timestamp=timestamp,
@@ -98,13 +92,13 @@ def database_thread():
                 avg_data_point.ow_humidity = weather_data['ow_humidity']
                 avg_data_point.ow_weather_desc = weather_data['ow_weather_desc']
 
-                print(f"Inserting data into database: {avg_data_point.to_dict()}")
+                print(f"向数据库插入数据: {avg_data_point.to_dict()}")
                 db.create(avg_data_point.to_dict())
-                print("Data inserted successfully")
+                print("数据插入成功")
             else:
-                print("No data points to process")
+                print("没有数据点需要处理")
         except Exception as e:
-            print(f"Error in database thread: {e}")
+            print(f"数据库线程出错: {e}")
             import traceback
             traceback.print_exc()
 
@@ -217,23 +211,28 @@ def perform_led_analysis(task_id):
             raise ValueError("无法获取LED使用统计")
         duration = led_stats['total_on_time'] / 3600  # 转换为小时
 
-        logging.info(f"Performing LED analysis: light_value={light_value}, duration={duration}")
+        logging.info(f"执行 LED 分析: light_value={light_value}, duration={duration}")
         analysis = led_agent.analyze_and_suggest(light_value, duration)
-        logging.info(f"LED analysis result: {analysis}")
+        logging.info(f"LED 分析结果: {analysis}")
+        
+        # 执行 LED 控制
+        led_action = led_agent.control_led(f"light_value={light_value}")
         
         # 确保所有必要的键都存在
         required_keys = ['led_action', 'energy_info', 'analysis', 'suggestion']
         for key in required_keys:
             if key not in analysis:
                 analysis[key] = "信息不可用"
+        
+        analysis['led_action'] = led_action  # 更新实际执行的操作
 
         analysis_results[task_id] = analysis
     except Exception as e:
-        logging.error(f"Error in perform_led_analysis: {str(e)}")
+        logging.error(f"执行 LED 分析时出错: {str(e)}")
         logging.error(traceback.format_exc())
         analysis_results[task_id] = {
-            'led_action': led_agent.control_led(light_value) if 'light_value' in locals() else "无法确定",
-            'energy_info': led_agent.calculate_energy(duration) if 'duration' in locals() else "无法计算",
+            'led_action': "无法确定",
+            'energy_info': "无法计算",
             'analysis': "由于技术问题，无法生成完整分析。",
             'suggestion': "请稍后再试。"
         }

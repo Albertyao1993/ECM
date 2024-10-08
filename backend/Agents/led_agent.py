@@ -11,7 +11,8 @@ import re
 import traceback
 
 class LEDAgent:
-    def __init__(self):
+    def __init__(self, dth111):
+        self.dth111 = dth111
         try:
             self.llm = Ollama(model="qwen2.5")
             self.energy_calculator = EnergyCalculator()
@@ -86,12 +87,19 @@ class LEDAgent:
         try:
             light_value = float(input_str.split('=')[-1].strip())
             if light_value < 100:
-                return "Turn on LED light"
+                action = "Turn on LED light"
             else:
-                return "Turn off LED light"
+                action = "Turn off LED light"
+            
+            # 调用 DTH111 的方法来实际控制 LED
+            success = self.dth111.control_led_from_agent(action)
+            if success:
+                return action
+            else:
+                return "无法控制 LED 灯。操作失败。"
         except Exception as e:
-            logging.error(f"Error in control_led: {str(e)}")
-            return "Unable to control LED light. Please ensure you provided a correct light value."
+            logging.error(f"控制 LED 时出错: {str(e)}")
+            return "无法控制 LED 灯。请确保您提供了正确的光照值。"
 
     def calculate_energy(self, input_str):
         try:
