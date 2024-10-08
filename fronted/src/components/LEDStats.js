@@ -5,18 +5,29 @@ const LEDStats = () => {
   const [ledStats, setLedStats] = useState(null);
   const [ledAnalysis, setLedAnalysis] = useState(null);
   const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
+  const [shouldRefresh, setShouldRefresh] = useState(true);
 
   useEffect(() => {
-    fetchLEDStats();
-    fetchLEDAnalysis();
+    const fetchData = async () => {
+      await fetchLEDStats();
+      if (shouldRefresh) {
+        await fetchLEDAnalysis();
+      }
+    };
 
-    const interval = setInterval(() => {
-      fetchLEDStats();
-      fetchLEDAnalysis();
-    }, 60000); // Update every minute
+    fetchData();
 
-    return () => clearInterval(interval);
-  }, []);
+    let interval;
+    if (shouldRefresh) {
+      interval = setInterval(fetchData, 60000); // Update every minute
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [shouldRefresh]);
 
   const fetchLEDStats = async () => {
     try {
@@ -37,9 +48,10 @@ const LEDStats = () => {
       } else {
         setLedAnalysis(response.data);
         setIsAnalysisLoading(false);
+        setShouldRefresh(false); // Stop refreshing after getting analysis results
       }
     } catch (error) {
-      console.error('Error fetching LED analysis:', error);
+      console.error('Error getting LED analysis:', error);
       setIsAnalysisLoading(false);
     }
   };
@@ -51,6 +63,7 @@ const LEDStats = () => {
         if (response.status === 200) {
           setLedAnalysis(response.data);
           setIsAnalysisLoading(false);
+          setShouldRefresh(false); // Stop refreshing after getting analysis results
           clearInterval(pollInterval);
         }
       } catch (error) {
@@ -62,13 +75,31 @@ const LEDStats = () => {
     setTimeout(() => {
       clearInterval(pollInterval);
       setIsAnalysisLoading(false);
-      setLedAnalysis({ error: 'Analysis timed out, please try again later' });
+      setLedAnalysis({ error: 'Analysis timeout, please try again later' });
     }, 60000); // Timeout after 60 seconds
+  };
+
+  const getEnergyInfo = (info) => {
+    if (typeof info === 'string') {
+      const parts = info.split(',');
+      return {
+        consumption: parts[0]?.split(':')[1]?.trim() || 'Unknown',
+        cost: parts[1]?.split(':')[1]?.trim() || 'Unknown'
+      };
+    } else if (typeof info === 'object' && info !== null) {
+      return {
+        consumption: info.energy_consumption || 'Unknown',
+        cost: info.cost || 'Unknown'
+      };
+    }
+    return { consumption: 'Unknown', cost: 'Unknown' };
   };
 
   if (!ledStats) {
     return <div>Loading...</div>;
   }
+
+  const energyInfo = ledAnalysis ? getEnergyInfo(ledAnalysis.energy_info) : { consumption: 'Unknown', cost: 'Unknown' };
 
   return (
     <div>
@@ -81,10 +112,19 @@ const LEDStats = () => {
         <p>Generating analysis...</p>
       ) : ledAnalysis ? (
         <>
-          <p>LED Action: {ledAnalysis.led_action}</p>
-          <p>Energy Consumption: {ledAnalysis.energy_info?.energy_consumption} kWh</p>
-          <p>Cost: {ledAnalysis.energy_info?.cost} currency units</p>
-          <p>Analysis: {ledAnalysis.analysis}</p>
+          <p>LED Action: {ledAnalysis.led_action || 'Unknown'}</p>
+          <p>Energy Consumption: {energyInfo.consumption}</p>
+          <p>Cost: {energyInfo.cost}</p>
+          <div>
+            <label htmlFor="analysisTextarea">Analysis Result:</label>
+            <textarea
+              id="analysisTextarea"
+              value={ledAnalysis.analysis || ''}
+              readOnly
+              rows={5}
+              style={{ width: '100%', marginTop: '10px' }}
+            />
+          </div>
         </>
       ) : (
         <p>No analysis data available</p>
