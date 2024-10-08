@@ -1,6 +1,6 @@
 import signal
 import sys
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +15,11 @@ from open_weather.weather import OpenWeather
 import time
 from datetime import datetime, timedelta
 import queue
+from Agents.led_agent import LEDAgent
+import asyncio
+import uuid
+import logging
+import traceback
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}},supports_credentials=True)
@@ -32,6 +37,8 @@ dth111 = DTH111(data_queue=data_queue, lock=lock, db=db)
 open_weather = OpenWeather('fa3005c77c9d4631ef729307d175661f', 'Darmstadt')
 video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
+
+led_agent = LEDAgent()
 
 def load_sensor_data():
     # Sensor data thread
@@ -168,15 +175,68 @@ def get_led_status():
 
 @app.route('/data/led_stats', methods=['GET'])
 def get_led_stats():
-    stats = dth111.get_led_usage_stats()
-    print(f"LED stats: {stats}")  # Add this log
-    return jsonify(stats)
+    try:
+        led_stats = dth111.get_led_usage_stats()
+        return jsonify(led_stats)
+    except Exception as e:
+        logging.error(f"Error in get_led_stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/data/led_history', methods=['GET'])
 def get_led_history():
     history = db.get_led_status_history()
     print(f"LED history: {[status.to_dict() for status in history]}")  # Add this log
     return jsonify([status.to_dict() for status in history])
+
+@app.route('/data/led_analysis', methods=['GET'])
+def get_led_analysis():
+    task_id = request.args.get('task_id')
+    if task_id:
+        # 检查任务是否完成
+        if task_id in analysis_results:
+            result = analysis_results.pop(task_id)
+            return jsonify(result)
+        else:
+            return jsonify({'status': 'processing'}), 202
+    else:
+        # 开始新的分析任务
+        task_id = str(uuid.uuid4())
+        executor.submit(perform_led_analysis, task_id)
+        return jsonify({'task_id': task_id}), 202
+
+analysis_results = {}
+
+def perform_led_analysis(task_id):
+    try:
+        latest_data = dth111.get_latest_data()
+        if not latest_data:
+            raise ValueError("无法获取最新数据")
+        light_value = latest_data.light
+        led_stats = dth111.get_led_usage_stats()
+        if not led_stats:
+            raise ValueError("无法获取LED使用统计")
+        duration = led_stats['total_on_time'] / 3600  # 转换为小时
+
+        logging.info(f"Performing LED analysis: light_value={light_value}, duration={duration}")
+        analysis = led_agent.analyze_and_suggest(light_value, duration)
+        logging.info(f"LED analysis result: {analysis}")
+        
+        # 确保所有必要的键都存在
+        required_keys = ['led_action', 'energy_info', 'analysis', 'suggestion']
+        for key in required_keys:
+            if key not in analysis:
+                analysis[key] = "信息不可用"
+
+        analysis_results[task_id] = analysis
+    except Exception as e:
+        logging.error(f"Error in perform_led_analysis: {str(e)}")
+        logging.error(traceback.format_exc())
+        analysis_results[task_id] = {
+            'led_action': led_agent.control_led(light_value) if 'light_value' in locals() else "无法确定",
+            'energy_info': led_agent.calculate_energy(duration) if 'duration' in locals() else "无法计算",
+            'analysis': "由于技术问题，无法生成完整分析。",
+            'suggestion': "请稍后再试。"
+        }
 
 @app.route('/data/energy_stats', methods=['GET'])
 def get_energy_stats():
@@ -214,7 +274,7 @@ if __name__ == '__main__':
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        executor.submit(video_frames_thread)
+        # executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:
@@ -225,3 +285,4 @@ if __name__ == '__main__':
         if "executor" in globals():
             executor.shutdown(wait=True)
         video_detection.stop_detection()
+        logging.info("Program execution completed")

@@ -1,56 +1,94 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 
 const LEDStats = () => {
-  const [stats, setStats] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [energyStats, setEnergyStats] = useState(null);
+  const [ledStats, setLedStats] = useState(null);
+  const [ledAnalysis, setLedAnalysis] = useState(null);
+  const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const statsResponse = await axios.get('http://127.0.0.1:5000/data/led_stats');
-        setStats(statsResponse.data);
+    fetchLEDStats();
+    fetchLEDAnalysis();
 
-        const historyResponse = await axios.get('http://127.0.0.1:5000/data/led_history');
-        setHistory(historyResponse.data);
+    const interval = setInterval(() => {
+      fetchLEDStats();
+      fetchLEDAnalysis();
+    }, 60000); // Update every minute
 
-        const energyResponse = await axios.get('http://127.0.0.1:5000/data/energy_stats');
-        setEnergyStats(energyResponse.data);
-      } catch (error) {
-        console.error('Error fetching LED data:', error);
-      }
-    };
-
-    fetchData();
+    return () => clearInterval(interval);
   }, []);
 
-  if (!stats || !energyStats) {
-    return <div>Loading LED statistics...</div>;
+  const fetchLEDStats = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/data/led_stats');
+      setLedStats(response.data);
+    } catch (error) {
+      console.error('Error fetching LED stats:', error);
+    }
+  };
+
+  const fetchLEDAnalysis = async () => {
+    setIsAnalysisLoading(true);
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/data/led_analysis');
+      if (response.status === 202) {
+        // Start polling
+        pollAnalysisResult(response.data.task_id);
+      } else {
+        setLedAnalysis(response.data);
+        setIsAnalysisLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching LED analysis:', error);
+      setIsAnalysisLoading(false);
+    }
+  };
+
+  const pollAnalysisResult = async (taskId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://127.0.0.1:5000/data/led_analysis?task_id=${taskId}`);
+        if (response.status === 200) {
+          setLedAnalysis(response.data);
+          setIsAnalysisLoading(false);
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error('Error polling analysis result:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Set timeout to prevent infinite polling
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setIsAnalysisLoading(false);
+      setLedAnalysis({ error: 'Analysis timed out, please try again later' });
+    }, 60000); // Timeout after 60 seconds
+  };
+
+  if (!ledStats) {
+    return <div>Loading...</div>;
   }
 
   return (
     <div>
-      <h2>LED Usage Statistics</h2>
-      <p>Total usage time: {stats.total_on_time !== undefined ? stats.total_on_time.toFixed(2) : 'N/A'} seconds</p>
-      <p>Number of activations: {stats.on_count !== undefined ? stats.on_count : 'N/A'} times</p>
+      <h2>LED Statistics</h2>
+      <p>Total On Time: {ledStats.total_on_time.toFixed(2)} seconds</p>
+      <p>On Count: {ledStats.on_count}</p>
       
-      <h3>Energy Consumption Statistics</h3>
-      <p>Total energy consumption: {energyStats.total_energy.toFixed(4)} kWh</p>
-      <p>Total cost: {energyStats.total_cost.toFixed(2)} yuan</p>
-      
-      <h3>Recent Status History</h3>
-      <ul>
-        {history.map((item, index) => (
-          <li key={index}>
-            {item.timestamp} - Status: {item.status}, 
-            Duration: {item.duration !== undefined ? item.duration.toFixed(2) : 'N/A'} seconds
-          </li>
-        ))}
-      </ul>
-      
-      <Link to="/">Return to Home</Link>
+      <h3>AI Analysis</h3>
+      {isAnalysisLoading ? (
+        <p>Generating analysis...</p>
+      ) : ledAnalysis ? (
+        <>
+          <p>LED Action: {ledAnalysis.led_action}</p>
+          <p>Energy Consumption: {ledAnalysis.energy_info?.energy_consumption} kWh</p>
+          <p>Cost: {ledAnalysis.energy_info?.cost} currency units</p>
+          <p>Analysis: {ledAnalysis.analysis}</p>
+        </>
+      ) : (
+        <p>No analysis data available</p>
+      )}
     </div>
   );
 };
