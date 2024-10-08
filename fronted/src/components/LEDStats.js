@@ -1,56 +1,145 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 
 const LEDStats = () => {
-  const [stats, setStats] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [energyStats, setEnergyStats] = useState(null);
+  const [ledStats, setLedStats] = useState(null);
+  const [ledAnalysis, setLedAnalysis] = useState(null);
+  const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
+  const [shouldRefresh, setShouldRefresh] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const statsResponse = await axios.get('http://127.0.0.1:5000/data/led_stats');
-        setStats(statsResponse.data);
-
-        const historyResponse = await axios.get('http://127.0.0.1:5000/data/led_history');
-        setHistory(historyResponse.data);
-
-        const energyResponse = await axios.get('http://127.0.0.1:5000/data/energy_stats');
-        setEnergyStats(energyResponse.data);
-      } catch (error) {
-        console.error('Error fetching LED data:', error);
+      await fetchLEDStats();
+      if (shouldRefresh) {
+        await fetchLEDAnalysis();
       }
     };
 
     fetchData();
-  }, []);
 
-  if (!stats || !energyStats) {
-    return <div>Loading LED statistics...</div>;
+    let interval;
+    if (shouldRefresh) {
+      interval = setInterval(fetchData, 60000); // Update every minute
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [shouldRefresh]);
+
+  const fetchLEDStats = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/data/led_stats');
+      setLedStats(response.data);
+    } catch (error) {
+      console.error('Error fetching LED stats:', error);
+    }
+  };
+
+  const fetchLEDAnalysis = async () => {
+    setIsAnalysisLoading(true);
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/data/led_analysis');
+      if (response.status === 202) {
+        // Start polling
+        pollAnalysisResult(response.data.task_id);
+      } else {
+        setLedAnalysis(response.data);
+        setIsAnalysisLoading(false);
+        setShouldRefresh(false); // Stop refreshing after getting analysis results
+      }
+    } catch (error) {
+      console.error('Error getting LED analysis:', error);
+      setIsAnalysisLoading(false);
+    }
+  };
+
+  const pollAnalysisResult = async (taskId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`http://127.0.0.1:5000/data/led_analysis?task_id=${taskId}`);
+        if (response.status === 200) {
+          setLedAnalysis(response.data);
+          setIsAnalysisLoading(false);
+          setShouldRefresh(false); // Stop refreshing after getting analysis results
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error('Error polling analysis result:', error);
+      }
+    }, 5000); // Poll every 5 seconds instead of 2
+
+    // Increase timeout to 5 minutes (300000 ms)
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setIsAnalysisLoading(false);
+      setLedAnalysis({ 
+        error: 'Analysis is taking longer than expected. Please check back later or try refreshing the page.' 
+      });
+    }, 300000);
+  };
+
+  const getEnergyInfo = (info) => {
+    if (typeof info === 'string') {
+      const parts = info.split(',');
+      return {
+        consumption: parts[0]?.split(':')[1]?.trim() || 'Unknown',
+        cost: parts[1]?.split(':')[1]?.trim() || 'Unknown'
+      };
+    } else if (typeof info === 'object' && info !== null) {
+      return {
+        consumption: info.energy_consumption || 'Unknown',
+        cost: info.cost || 'Unknown'
+      };
+    }
+    return { consumption: 'Unknown', cost: 'Unknown' };
+  };
+
+  if (!ledStats) {
+    return <div>Loading...</div>;
   }
+
+  const energyInfo = ledAnalysis ? getEnergyInfo(ledAnalysis.energy_info) : { consumption: 'Unknown', cost: 'Unknown' };
 
   return (
     <div>
-      <h2>LED Usage Statistics</h2>
-      <p>Total usage time: {stats.total_on_time !== undefined ? stats.total_on_time.toFixed(2) : 'N/A'} seconds</p>
-      <p>Number of activations: {stats.on_count !== undefined ? stats.on_count : 'N/A'} times</p>
+      <h2>LED Statistics</h2>
+      <p>Total On Time: {ledStats.total_on_time.toFixed(2)} seconds</p>
+      <p>On Count: {ledStats.on_count}</p>
       
-      <h3>Energy Consumption Statistics</h3>
-      <p>Total energy consumption: {energyStats.total_energy.toFixed(4)} kWh</p>
-      <p>Total cost: {energyStats.total_cost.toFixed(2)} yuan</p>
-      
-      <h3>Recent Status History</h3>
-      <ul>
-        {history.map((item, index) => (
-          <li key={index}>
-            {item.timestamp} - Status: {item.status}, 
-            Duration: {item.duration !== undefined ? item.duration.toFixed(2) : 'N/A'} seconds
-          </li>
-        ))}
-      </ul>
-      
-      <Link to="/">Return to Home</Link>
+      <h3>AI Analysis</h3>
+      {isAnalysisLoading ? (
+        <p>Generating analysis... This may take a few minutes.</p>
+      ) : ledAnalysis ? (
+        <>
+          {ledAnalysis.error ? (
+            <div>
+              <p>{ledAnalysis.error}</p>
+              <button onClick={() => fetchLEDAnalysis()}>Retry Analysis</button>
+            </div>
+          ) : (
+            <>
+              <p>LED Action: {ledAnalysis.led_action || 'Unknown'}</p>
+              <p>Energy Consumption: {energyInfo.consumption}</p>
+              <p>Cost: {energyInfo.cost}</p>
+              <div>
+                <label htmlFor="analysisTextarea">Analysis Result:</label>
+                <textarea
+                  id="analysisTextarea"
+                  value={ledAnalysis.analysis || ''}
+                  readOnly
+                  rows={5}
+                  style={{ width: '100%', marginTop: '10px' }}
+                />
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <p>No analysis data available. <button onClick={() => fetchLEDAnalysis()}>Start Analysis</button></p>
+      )}
     </div>
   );
 };

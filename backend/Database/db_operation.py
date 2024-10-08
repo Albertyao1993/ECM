@@ -35,6 +35,14 @@ class Database:
             'energy_consumption',
             codec_options=CodecOptions(tz_aware=False)
         )
+
+        # Ensure energy_consumption collection exists
+        if 'energy_consumption' not in self.db.list_collection_names():
+            self.db.create_collection('energy_consumption')
+            print("Created energy_consumption collection")
+        else:
+            print("energy_consumption collection already exists")
+
         self.energy_calculator = EnergyCalculator()
 
     def create(self, data):
