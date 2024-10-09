@@ -1,77 +1,57 @@
 import time
-import base64
 import cv2
 import os
-from flask_socketio import SocketIO
 from yolo.video_detection import VideoDetection
 from queue import Queue
 from threading import Event, Lock
+from Database.sensor_data import SensorData
 
 class VideoStream:
-    def __init__(self, socketio: SocketIO, video_detection: VideoDetection, data_queue: Queue, stop_event: Event, lock: Lock):
-        self.socketio = socketio
+    def __init__(self, video_detection: VideoDetection, data_queue: Queue, stop_event: Event, lock: Lock, dth111):
         self.video_detection = video_detection
         self.data_queue = data_queue
         self.stop_event = stop_event
         self.lock = lock
-        self.frame_rate = 10
-        self.prev = 0
+        self.dth111 = dth111
 
-        # Detect OS and set camera source
+        # 检测操作系统并设置摄像头源
         if os.name == 'nt':  # Windows
             self.camera_source = 0
         else:  # Linux
             self.camera_source = '/dev/video0'
 
-    def send_video_frames(self):
+    def capture_and_detect(self):
         cap = cv2.VideoCapture(self.camera_source)
         if not cap.isOpened():
-            print("Error: Could not open video stream.")
+            print("错误：无法打开视频流。")
             return
 
-        while self.video_detection.running and cap.isOpened() and not self.stop_event.is_set():
+        while not self.stop_event.is_set():
+            # 每分钟捕获一次图像
+            time.sleep(60)
+
             ret, frame = cap.read()
             if not ret:
-                print("Error: Could not read frame from video stream.")
-                break
-       
-            # # Resize the frame to reduce size
-            # frame = cv2.resize(frame, (320, 240))
-
-            # Perform detection and get person count along with bounding boxes
-            frame, person_count, boxes = self.video_detection.detect_frame_with_boxes(frame)
-
-            for box in boxes:
-                x, y, w, h = box
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-            cv2.putText(frame, f'Person count: {person_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow('Video Stream', frame)
-
-            # Encode the frame in JPEG format with lower quality
-            ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 10])
-            if not ret:
-                print("Error: Could not encode frame.")
+                print("错误：无法从视频流读取帧。")
                 continue
 
-            frame_encoded = base64.b64encode(buffer).decode('utf-8')
-
-            # Send the frame, person count, and bounding boxes via WebSocket
-            self.socketio.emit('video_frame', {
-                'frame': frame_encoded,
-                'person_count': person_count,
-                'boxes': boxes  # Bounding boxes information
-            })
+            # 执行检测并获取人数
+            person_count = self.video_detection.detect_persons(frame)
+            print(f"检测到的人数: {person_count}")  # 添加这行日志
 
             # 将人数数据发送到队列中
             with self.lock:
-                if not self.data_queue.empty():
-                    latest_data_point = self.data_queue.get()
-                    latest_data_point.person_count = person_count
-                    self.data_queue.put(latest_data_point)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+                # if not self.data_queue.empty():
+                #     latest_data_point = self.data_queue.get()
+                #     latest_data_point.person_count = person_count
+                #     self.data_queue.put(latest_data_point)
+                # else:
+                #     print("警告：数据队列为空，创建新的数据点")
+                #     from Database.sensor_data import SensorData
+                #     new_data_point = SensorData(person_count=person_count)
+                #     self.data_queue.put(new_data_point)
+                if self.dth111.latest_data:
+                    self.dth111.latest_data.person_count = person_count
+                
 
         cap.release()
-        cv2.destroyAllWindows()

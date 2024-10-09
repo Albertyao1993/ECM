@@ -29,14 +29,14 @@ data_queue = Queue()
 stop_event = Event()
 lock = Lock()
 
-executor = ThreadPoolExecutor(max_workers=3)
+executor = ThreadPoolExecutor(max_workers=10)
 
 # Initialize the database
 db = Database(uri="mongodb://localhost:27017/", db_name="sensor_data", collection_name="readings")
 dth111 = DTH111(data_queue=data_queue, lock=lock, db=db)
 open_weather = OpenWeather('fa3005c77c9d4631ef729307d175661f', 'Darmstadt')
 video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
-video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
+video_stream = VideoStream(video_detection, data_queue, stop_event, lock, dth111)
 
 led_agent = LEDAgent(dth111)
 
@@ -55,26 +55,20 @@ def database_thread():
             try:
                 while True:
                     data_point = data_queue.get_nowait()
-                    if isinstance(data_point, dict):
-                        # 移除 SensorData 中未定义的字段
-                        data_point = {k: v for k, v in data_point.items() if k in SensorData.__annotations__}
-                        data_points.append(SensorData(**data_point))
-                    elif isinstance(data_point, SensorData):
-                        data_points.append(data_point)
-                    else:
-                        print(f"队列中出现意外的数据类型: {type(data_point)}")
+                    data_points.append(data_point)
             except queue.Empty:
                 pass
 
             if data_points:
                 print(f"处理 {len(data_points)} 个数据点")
-                avg_temperature = sum(dp.temperature for dp in data_points) / len(data_points)
-                avg_humidity = sum(dp.humidity for dp in data_points) / len(data_points)
-                avg_light = sum(dp.light for dp in data_points) / len(data_points)
+                avg_temperature = sum(dp.temperature for dp in data_points if dp.temperature is not None) / len([dp for dp in data_points if dp.temperature is not None]) if any(dp.temperature is not None for dp in data_points) else None
+                avg_humidity = sum(dp.humidity for dp in data_points if dp.humidity is not None) / len([dp for dp in data_points if dp.humidity is not None]) if any(dp.humidity is not None for dp in data_points) else None
+                avg_light = sum(dp.light for dp in data_points if dp.light is not None) / len([dp for dp in data_points if dp.light is not None]) if any(dp.light is not None for dp in data_points) else None
                 timestamp = datetime.now()
 
-                # 调用新的自动控制方法
-                # dth111.auto_control_led(avg_light)
+                # 从 dth111.latest_data 获取最新的 person_count
+                with lock:
+                    person_count = dth111.latest_data.person_count if dth111.latest_data and dth111.latest_data.person_count is not None else 0
 
                 avg_data_point = SensorData(
                     timestamp=timestamp,
@@ -83,8 +77,8 @@ def database_thread():
                     light=avg_light,
                     light_status=dth111.led_status,
                     ac_status=dth111.ac_status,
-                    sound_state=data_points[-1].sound_state,
-                    person_count=data_points[-1].person_count
+                    sound_state=data_points[-1].sound_state if hasattr(data_points[-1], 'sound_state') else None,
+                    person_count=person_count
                 )
 
                 weather_data = open_weather.get_weather_data()
@@ -95,6 +89,10 @@ def database_thread():
                 print(f"向数据库插入数据: {avg_data_point.to_dict()}")
                 db.create(avg_data_point.to_dict())
                 print("数据插入成功")
+
+                # 更新 dth111 的最新数据
+                with lock:
+                    dth111.latest_data = avg_data_point
             else:
                 print("没有数据点需要处理")
         except Exception as e:
@@ -102,18 +100,19 @@ def database_thread():
             import traceback
             traceback.print_exc()
 
-def video_frames_thread():
-    # Video stream processing thread
-    print("Starting video frames thread")
+
+
+def video_capture_thread():
+    print("启动视频捕获线程")
     while not stop_event.is_set():
         try:
-            video_stream.send_video_frames()
+            video_stream.capture_and_detect()
         except Exception as e:
-            print(f"Error in video frames thread: {e}")
+            print(f"视频捕获线程出错: {e}")
             break
 
 # Start YOLO detection
-video_detection.start_detection()
+# video_detection.start_detection()
 
 @app.route('/data/ac_state', methods=['GET'])
 def get_current_data():
@@ -132,27 +131,29 @@ def get_current_data():
 @app.route('/data/realtime', methods=['GET'])
 def get_realtime_data():
     try:
-        data = dth111.latest_data
-        print(f"Realtime data: {data}")
-        if data:
-            return jsonify({
-                'temperature': data.temperature,
-                'humidity': data.humidity,
-                'light': data.light,
-                'timestamp': data.timestamp.isoformat(),
-                'light_status': data.light_status,
-                'ac_status': data.ac_status,
-                'sound_state': data.sound_state,
-                'ow_temperature': data.ow_temperature,
-                'ow_humidity': data.ow_humidity,
-                'ow_weather_desc': data.ow_weather_desc,
-                'person_count': data.person_count
-            })
-        else:
-            return jsonify({'error': 'No data available'}), 404
+        with lock:
+            data = dth111.latest_data
+            print(f"Realtime data: {data}")
+            if data:
+                return jsonify({
+                    'temperature': data.temperature,
+                    'humidity': data.humidity,
+                    'light': data.light,
+                    'timestamp': data.timestamp.isoformat(),
+                    'light_status': data.light_status,
+                    'ac_status': data.ac_status,
+                    'sound_state': data.sound_state,
+                    'ow_temperature': data.ow_temperature,
+                    'ow_humidity': data.ow_humidity,
+                    'ow_weather_desc': data.ow_weather_desc,
+                    'person_count': data.person_count
+                })
+            else:
+                return jsonify({'error': 'No data available'}), 404
     except Exception as e:
         print(f"Error in get_realtime_data: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/data/history', methods=['GET'])
 def get_data_history():
@@ -267,21 +268,19 @@ def initialize_serial():
 if __name__ == '__main__':
     try:
         if not initialize_serial():
-            print("Unable to initialize serial, program exiting")
+            print("无法初始化串口，程序退出")
             sys.exit(1)
 
-        video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        # executor.submit(video_frames_thread)
+        executor.submit(video_capture_thread)
 
-        socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
+        socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False)
     except Exception as e:
-        print(f"Error occurred during program execution: {e}")
+        print(f"程序执行期间发生错误: {e}")
     finally:
         stop_event.set()
         dth111.close()
         if "executor" in globals():
             executor.shutdown(wait=True)
-        video_detection.stop_detection()
-        logging.info("Program execution completed")
+        logging.info("程序执行完成")

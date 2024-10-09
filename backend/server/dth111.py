@@ -81,10 +81,22 @@ class DTH111:
                 if data:
                     print(f"Parsed data: {data}")
                     self.data_queue.put(data)
-                    self.latest_data = data
-                    self.led_status = data.light_status
-                    self.ac_status = data.ac_status
-
+                    
+                    with self.lock:
+                        if self.latest_data:
+                            # 更新最新数据的各个字段，保留 person_count
+                            self.latest_data.temperature = data.temperature
+                            self.latest_data.humidity = data.humidity
+                            self.latest_data.light = data.light
+                            self.latest_data.sound_state = data.sound_state
+                            self.latest_data.timestamp = data.timestamp
+                            self.latest_data.light_status = data.light_status
+                            self.latest_data.ac_status = data.ac_status
+                        else:
+                            self.latest_data = data  # 第一次初始化
+                        
+                        self.led_status = data.light_status
+                        self.ac_status = data.ac_status
                 time.sleep(2)
             except serial.SerialException as e:
                 print(f"Serial read error: {e}")
