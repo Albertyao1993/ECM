@@ -26,8 +26,8 @@ const LiveStream = () => {
 
   return (
     <div>
-      <h1>实时人数检测</h1>
-      <p>当前检测到的人数: {personCount}</p>
+      <h1>Person Count Detection in Real time</h1>
+      <p>Current Persons: {personCount}</p>
     </div>
   );
 };

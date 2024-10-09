@@ -100,7 +100,7 @@ class LEDAgent:
             if success:
                 return action
             else:
-                return "无法控制 LED 灯。操作失败。"
+                return "Failed, can not control led"
         except Exception as e:
             logging.error(f"控制 LED 时出错: {str(e)}")
             return "无法控制 LED 灯。请确保您提供了正确的光照值。"
