@@ -2,19 +2,19 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import SensorStatus from './components/SensorStatus';
 import SensorChart from './components/SensorChart';
-import PersonCount from './components/LiveStream'; // 重命名组件
+import PersonCount from './components/LiveStream'; // Renamed component
 import LEDStats from './components/LEDStats';
 import RealTimeChart from './components/RealTimeChart';
-import './App.css'; // 确保您有这个文件来存放 CSS
+import './App.css'; // Make sure you have this file for CSS
 
 function App() {
   return (
     <Router>
       <div className="App">
         <nav className="navbar">
-          <Link to="/" className="nav-item">首页</Link>
-          <Link to="/realtime" className="nav-item">实时图表</Link>
-          <Link to="/led-stats" className="nav-item">LED 统计</Link>
+          <Link to="/" className="nav-item">Home</Link>
+          <Link to="/realtime" className="nav-item">Real-time Chart</Link>
+          <Link to="/led-stats" className="nav-item">LED Statistics</Link>
         </nav>
 
         <Routes>

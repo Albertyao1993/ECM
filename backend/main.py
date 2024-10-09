@@ -47,7 +47,7 @@ def load_sensor_data():
         dth111.read_sensor_data()
 
 def database_thread():
-    print("启动数据库线程")
+    print("Starting database thread")
     while not stop_event.is_set():
         try:
             time.sleep(60)
@@ -60,7 +60,7 @@ def database_thread():
                 pass
 
             if data_points:
-                print(f"处理 {len(data_points)} 个数据点")
+                print(f"Processing {len(data_points)} data points")
                 avg_temperature = sum(dp.temperature for dp in data_points if dp.temperature is not None) / len([dp for dp in data_points if dp.temperature is not None]) if any(dp.temperature is not None for dp in data_points) else None
                 avg_humidity = sum(dp.humidity for dp in data_points if dp.humidity is not None) / len([dp for dp in data_points if dp.humidity is not None]) if any(dp.humidity is not None for dp in data_points) else None
                 avg_light = sum(dp.light for dp in data_points if dp.light is not None) / len([dp for dp in data_points if dp.light is not None]) if any(dp.light is not None for dp in data_points) else None
@@ -86,29 +86,29 @@ def database_thread():
                 avg_data_point.ow_humidity = weather_data['ow_humidity']
                 avg_data_point.ow_weather_desc = weather_data['ow_weather_desc']
 
-                print(f"向数据库插入数据: {avg_data_point.to_dict()}")
+                print(f"Inserting data into database: {avg_data_point.to_dict()}")
                 db.create(avg_data_point.to_dict())
-                print("数据插入成功")
+                print("Data insertion successful")
 
-                # 更新 dth111 的最新数据
+                # Update the latest data in dth111
                 with lock:
                     dth111.latest_data = avg_data_point
             else:
-                print("没有数据点需要处理")
+                print("No data points to process")
         except Exception as e:
-            print(f"数据库线程出错: {e}")
+            print(f"Error in database thread: {e}")
             import traceback
             traceback.print_exc()
 
 
 
 def video_capture_thread():
-    print("启动视频捕获线程")
+    print("Starting video capture thread")
     while not stop_event.is_set():
         try:
             video_stream.capture_and_detect()
         except Exception as e:
-            print(f"视频捕获线程出错: {e}")
+            print(f"Error in video capture thread: {e}")
             break
 
 # Start YOLO detection
@@ -205,37 +205,37 @@ def perform_led_analysis(task_id):
     try:
         latest_data = dth111.get_latest_data()
         if not latest_data:
-            raise ValueError("无法获取最新数据")
+            raise ValueError("Unable to get latest data")
         light_value = latest_data.light
         led_stats = dth111.get_led_usage_stats()
         if not led_stats:
-            raise ValueError("无法获取LED使用统计")
-        duration = led_stats['total_on_time'] / 3600  # 转换为小时
+            raise ValueError("Unable to get LED usage stats")
+        duration = led_stats['total_on_time'] / 3600  # Convert to hours
 
-        logging.info(f"执行 LED 分析: light_value={light_value}, duration={duration}")
+        logging.info(f"Performing LED analysis: light_value={light_value}, duration={duration}")
         analysis = led_agent.analyze_and_suggest(light_value, duration)
-        logging.info(f"LED 分析结果: {analysis}")
+        logging.info(f"LED analysis result: {analysis}")
         
-        # 执行 LED 控制
+        # Perform LED control
         led_action = led_agent.control_led(f"light_value={light_value}")
         
-        # 确保所有必要的键都存在
+        # Ensure all necessary keys exist
         required_keys = ['led_action', 'energy_info', 'analysis', 'suggestion']
         for key in required_keys:
             if key not in analysis:
-                analysis[key] = "信息不可用"
+                analysis[key] = "Information not available"
         
-        analysis['led_action'] = led_action  # 更新实际执行的操作
+        analysis['led_action'] = led_action  # Update with the actual action performed
 
         analysis_results[task_id] = analysis
     except Exception as e:
-        logging.error(f"执行 LED 分析时出错: {str(e)}")
+        logging.error(f"Error performing LED analysis: {str(e)}")
         logging.error(traceback.format_exc())
         analysis_results[task_id] = {
-            'led_action': "无法确定",
-            'energy_info': "无法计算",
-            'analysis': "由于技术问题，无法生成完整分析。",
-            'suggestion': "请稍后再试。"
+            'led_action': "Unable to determine",
+            'energy_info': "Unable to calculate",
+            'analysis': "Unable to generate complete analysis due to technical issues.",
+            'suggestion': "Please try again later."
         }
 
 @app.route('/data/energy_stats', methods=['GET'])
@@ -268,7 +268,7 @@ def initialize_serial():
 if __name__ == '__main__':
     try:
         if not initialize_serial():
-            print("无法初始化串口，程序退出")
+            print("Unable to initialize serial port, exiting program")
             sys.exit(1)
 
         executor.submit(load_sensor_data)
@@ -277,10 +277,10 @@ if __name__ == '__main__':
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000, use_reloader=False)
     except Exception as e:
-        print(f"程序执行期间发生错误: {e}")
+        print(f"Error occurred during program execution: {e}")
     finally:
         stop_event.set()
         dth111.close()
         if "executor" in globals():
             executor.shutdown(wait=True)
-        logging.info("程序执行完成")
+        logging.info("Program execution completed")
