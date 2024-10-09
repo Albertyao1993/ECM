@@ -9,12 +9,16 @@ import logging
 import json
 import re
 import traceback
+from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+import os
 
 class LEDAgent:
     def __init__(self, dth111):
         self.dth111 = dth111
         try:
-            self.llm = Ollama(model="qwen2.5")
+            load_dotenv()  # 加载 .env 文件中的环境变量
+            self.llm = ChatOpenAI(model_name="gpt-3.5-turbo")  # 使用 OpenAI 的模型
             self.energy_calculator = EnergyCalculator()
             self.tools = [
                 Tool(
