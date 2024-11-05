@@ -20,6 +20,7 @@ import asyncio
 import uuid
 import logging
 import traceback
+from Models.heating_prediction import HeatingPrediction
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}},supports_credentials=True)
@@ -39,6 +40,9 @@ video_detection = VideoDetection(model_path='yolo/weights/yolov8n.pt')
 video_stream = VideoStream(socketio, video_detection, data_queue, stop_event, lock)
 
 led_agent = LEDAgent()
+
+# Initialize HeatingPrediction
+heating_predictor = HeatingPrediction()
 
 def load_sensor_data():
     # Sensor data thread
@@ -97,6 +101,11 @@ def database_thread():
                 avg_data_point.ow_temperature = weather_data['ow_temperature']
                 avg_data_point.ow_humidity = weather_data['ow_humidity']
                 avg_data_point.ow_weather_desc = weather_data['ow_weather_desc']
+                avg_data_point.ow_dewpoint = weather_data['ow_dewpoint']
+                avg_data_point.ow_wind_speed = weather_data['ow_wind_speed']
+                avg_data_point.ow_wind_direction = weather_data['ow_wind_direction']
+                avg_data_point.ow_precipitation = weather_data['ow_precipitation']
+                avg_data_point.ow_sun_duration = weather_data['ow_sun_duration']
 
                 print(f"Inserting data into database: {avg_data_point.to_dict()}")
                 db.create(avg_data_point.to_dict())
@@ -149,10 +158,15 @@ def get_realtime_data():
                 'light_status': data.light_status,
                 'ac_status': data.ac_status,
                 'sound_state': data.sound_state,
+                'person_count': data.person_count,
                 'ow_temperature': data.ow_temperature,
                 'ow_humidity': data.ow_humidity,
                 'ow_weather_desc': data.ow_weather_desc,
-                'person_count': data.person_count
+                'ow_dewpoint': data.ow_dewpoint,
+                'ow_wind_speed': data.ow_wind_speed,
+                'ow_wind_direction': data.ow_wind_direction,
+                'ow_precipitation': data.ow_precipitation,
+                'ow_sun_duration': data.ow_sun_duration
             })
         else:
             return jsonify({'error': 'No data available'}), 404
@@ -243,6 +257,66 @@ def get_energy_stats():
     stats = db.get_energy_stats()
     return jsonify(stats)
 
+@app.route('/data/weather', methods=['GET'])
+def get_weather_data():
+    try:
+        weather_data = open_weather.get_weather_data()
+        return jsonify(weather_data)
+    except Exception as e:
+        logging.error(f"Error getting weather data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/data/heating-prediction', methods=['GET'])
+def get_heating_prediction():
+    try:
+        # 获取当前预测
+        prediction_result = heating_predictor.predict()
+        if not prediction_result:
+            return jsonify({'error': 'Unable to generate prediction'}), 500
+
+        # 计算估算成本 (假设每千瓦时0.3欧元)
+        COST_PER_KWH = 0.3
+        estimated_usage = prediction_result['prediction']
+        estimated_cost = estimated_usage * COST_PER_KWH
+
+        # 根据预测值生成节能建议
+        tips = []
+        if estimated_usage > 20:  # 高能耗
+            tips = [
+                "Consider lowering room temperature by 1-2 degrees, each degree reduction saves about 6% energy",
+                "Check if doors and windows are properly sealed to avoid heat loss",
+                "Turn off heating in unused rooms"
+            ]
+        elif estimated_usage > 10:  # 中等能耗
+            tips = [
+                "Use timer to turn on heating only when needed",
+                "Ensure radiators are not blocked by furniture",
+                "Consider using smart thermostats to optimize heating"
+            ]
+        else:  # 低能耗
+            tips = [
+                "Current energy consumption is good",
+                "Maintain current usage habits",
+                "Consider scheduling regular maintenance"
+            ]
+
+        # 构建响应数据
+        response_data = {
+            'prediction': {
+                'estimated_usage': round(estimated_usage, 2),
+                'estimated_cost': round(estimated_cost, 2),
+                'timestamp': prediction_result['timestamp'],
+            },
+            'tips': tips,
+            'features': prediction_result['features_used']
+        }
+
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Error getting heating prediction: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 def signal_handler(sig, frame):
     print('Terminating...')
     stop_event.set()
@@ -250,6 +324,7 @@ def signal_handler(sig, frame):
     if "executor" in globals():
         executor.shutdown(wait=True)
     dth111.close()
+    heating_predictor.close()  # 关闭预测器连接
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
