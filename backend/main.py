@@ -317,6 +317,15 @@ def get_heating_prediction():
         print(f"Error getting heating prediction: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/data/heating-history', methods=['GET'])
+def get_heating_history():
+    try:
+        history = heating_predictor.get_prediction_history()
+        return jsonify(history)
+    except Exception as e:
+        print(f"Error getting heating history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 def signal_handler(sig, frame):
     print('Terminating...')
     stop_event.set()

@@ -43,6 +43,19 @@ class Database:
         else:
             print("energy_consumption collection already exists")
 
+        # Create heating predictions collection
+        self.heating_predictions = self.db.get_collection(
+            'heating_predictions',
+            codec_options=CodecOptions(tz_aware=False)
+        )
+
+        # Ensure heating_predictions collection exists
+        if 'heating_predictions' not in self.db.list_collection_names():
+            self.db.create_collection('heating_predictions')
+            print("Created heating_predictions collection")
+        else:
+            print("heating_predictions collection already exists")
+
         self.energy_calculator = EnergyCalculator()
 
     def create(self, data):
@@ -178,3 +191,52 @@ class Database:
             'cost': cost
         }
         self.create_energy_consumption(energy_data)
+
+    def create_heating_prediction(self, prediction_data):
+        """存储供暖预测记录，包含实际值字段"""
+        try:
+            # 确保时间戳没有时区信息
+            if 'timestamp' in prediction_data and isinstance(prediction_data['timestamp'], datetime):
+                prediction_data['timestamp'] = prediction_data['timestamp'].replace(tzinfo=None)
+            
+            # 添加 actual_value 字段，默认值为 0
+            prediction_data['actual_value'] = 0
+            
+            result = self.heating_predictions.insert_one(prediction_data)
+            print(f"Inserted heating prediction record: {prediction_data}")
+            return str(result.inserted_id)
+        except Exception as e:
+            print(f"Error inserting heating prediction record: {e}")
+            return None
+
+    def update_prediction_actual_value(self, timestamp, actual_value):
+        """更新预测记录的实际值"""
+        try:
+            # 查找最接近给定时间戳的预测记录并更新实际值
+            result = self.heating_predictions.update_one(
+                {"timestamp": {"$lte": timestamp}},
+                {"$set": {"actual_value": actual_value}},
+                sort=[("timestamp", -1)]
+            )
+            return result.modified_count
+        except Exception as e:
+            print(f"Error updating actual value: {e}")
+            return 0
+
+    def get_recent_predictions(self, limit=24):
+        """获取最近的预测记录，包含实际值"""
+        try:
+            cursor = self.heating_predictions.find(
+                {},
+                {'_id': 0}  # 不返回 _id 字段
+            ).sort('timestamp', -1).limit(limit)
+            
+            predictions = list(cursor)
+            # 转换时间戳为 ISO 格式字符串
+            for pred in predictions:
+                if isinstance(pred.get('timestamp'), datetime):
+                    pred['timestamp'] = pred['timestamp'].isoformat()
+            return predictions
+        except Exception as e:
+            print(f"Error getting recent predictions: {e}")
+            return []

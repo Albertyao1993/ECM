@@ -95,6 +95,15 @@
   font-weight: bold;
 }
 
+.usage.clickable {
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.usage.clickable:hover {
+  background-color: #e9ecef;
+}
+
 h2, h3 {
   color: #2c3e50;
   margin-bottom: 15px;

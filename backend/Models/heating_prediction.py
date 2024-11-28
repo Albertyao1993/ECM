@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from pymongo import MongoClient
 import os
+from backend.Database.db_operation import Database
 
 class HeatingPrediction:
     def __init__(self, model_path=None, 
@@ -32,13 +33,11 @@ class HeatingPrediction:
         self.de_holidays = holidays.DE()  # 德国节假日
         
         # 连接MongoDB
-        self.client = MongoClient(uri)
-        self.db = self.client[db_name]
-        self.collection = self.db[collection_name]
+        self.db = Database(uri, db_name, collection_name)
 
     def _get_latest_data(self):
         """获取MongoDB中最新的一条数据"""
-        return self.collection.find_one(sort=[('timestamp', -1)])
+        return self.db.collection.find_one(sort=[('timestamp', -1)])
 
     def _is_working_hour(self, hour):
         """判断是否是工作时间（9:00-17:00）"""
@@ -91,31 +90,52 @@ class HeatingPrediction:
 
     def predict(self):
         """
-        获取最新数据并进行预测
+        获取最新数据并进行预测，同时存储预测结果
         返回：预测的能源消耗值
         """
         try:
             # 获取最新数据
             latest_data = self._get_latest_data()
             if not latest_data:
-                raise ValueError("无法获取最新数据")
+                raise ValueError("Unable to get latest data")
 
             # 准备特征
             features = self._prepare_features(latest_data)
 
             # 进行预测
             prediction = self.model.predict(features)
-
-            return {
+            
+            current_time = datetime.now()
+            
+            # 准备预测结果数据
+            prediction_result = {
                 'prediction': float(prediction[0]),
-                'timestamp': latest_data['timestamp'],
+                'timestamp': current_time,
                 'features_used': features.to_dict(orient='records')[0]
             }
 
+            # 存储预测结果
+            self.db.create_heating_prediction({
+                'timestamp': current_time,
+                'prediction_value': prediction_result['prediction'],
+                'input_features': prediction_result['features_used']
+                # actual_value 将由 create_heating_prediction 方法自动添加
+            })
+
+            return prediction_result
+
         except Exception as e:
-            print(f"预测过程中发生错误: {str(e)}")
+            print(f"Error during prediction: {str(e)}")
             return None
 
+    def update_actual_value(self, timestamp, actual_value):
+        """更新指定时间戳预测记录的实际值"""
+        return self.db.update_prediction_actual_value(timestamp, actual_value)
+
+    def get_prediction_history(self, limit=24):
+        """获取预测历史记录"""
+        return self.db.get_recent_predictions(limit)
+
     def close(self):
-        """关闭MongoDB连接"""
-        self.client.close()
+        """关闭数据库连接"""
+        self.db.client.close()
