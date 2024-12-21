@@ -6,6 +6,9 @@ const HeatingPrediction = () => {
   const [predictionData, setPredictionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigateToHistory = () => {
+    window.location.href = '/heating-history';  // 或者使用 React Router 的 navigate
+  };
 
   useEffect(() => {
     fetchPredictionData();
@@ -50,7 +53,7 @@ const HeatingPrediction = () => {
           <div className="prediction-card">
             <h3>Next 15 Minutes Prediction</h3>
             <div className="prediction-value">
-              <div className="usage">
+              <div className="usage" onClick={navigateToHistory}>
                 <span className="label">Estimated Usage:</span>
                 <span className="value">{predictionData.prediction.estimated_usage.toFixed(2)} kWh</span>
               </div>

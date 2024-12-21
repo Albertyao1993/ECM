@@ -317,6 +317,15 @@ def get_heating_prediction():
         print(f"Error getting heating prediction: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/data/heating-history', methods=['GET'])
+def get_heating_history():
+    try:
+        history = heating_predictor.get_prediction_history()
+        return jsonify(history)
+    except Exception as e:
+        print(f"Error getting heating history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 def signal_handler(sig, frame):
     print('Terminating...')
     stop_event.set()
@@ -349,7 +358,7 @@ if __name__ == '__main__':
         video_detection.start_detection()
         executor.submit(load_sensor_data)
         executor.submit(database_thread)
-        # executor.submit(video_frames_thread)
+        executor.submit(video_frames_thread)
 
         socketio.run(app, debug=True, host='0.0.0.0', port=5000,use_reloader=False)
     except Exception as e:
